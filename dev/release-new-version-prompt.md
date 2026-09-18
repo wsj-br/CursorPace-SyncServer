@@ -12,7 +12,7 @@ Create a new release notes file `release-notes/RELEASE_NOTES_<version>.md` for C
      - `## Why this release matters` — One or two sentences on the main impact or reason for this release.
      - `## Detailed Changes` — Do not copy changelog bullets. Point to `dev/CHANGELOG.md` on `main` with a fragment for the version heading (for example `[0.1.1] - 2026-09-18` becomes `#011---2026-09-18`).
      - `---`
-     - `## Install` — How to run this version with Docker Compose or `docker build` / `docker run`, a persistent `/data` volume, and the listen port (default `7050`). Mention first-run login at `/login` with the default password `cursorpace01` and the required password change. Do not invent a published registry image name unless this repo already documents one.
+     - `## Install` — How to run this version from `ghcr.io/wsj-br/cursorpace-syncserver:<version>` (and `latest`), or with Docker Compose / `docker build` / `docker run`, a persistent `/data` volume, and the listen port (default `7050`). Mention first-run login at `/login` with the default password `cursorpace01` and the required password change.
      - `---`
      - `## Documentation` — Link README and `dev/DEVEL.md` as in the example below. Use the `main` branch on `https://github.com/wsj-br/CursorPace-SyncServer`.
      - `---`
@@ -44,13 +44,22 @@ See [`dev/CHANGELOG.md`](https://github.com/wsj-br/CursorPace-SyncServer/blob/ma
 
 ## Install
 
-Build and run with a persistent `/data` volume:
+Pull this version from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/wsj-br/cursorpace-syncserver:0.1.1
+docker run --name cp-sync -d -p 7050:7050 \
+  -v cp-sync-data:/data \
+  ghcr.io/wsj-br/cursorpace-syncserver:0.1.1
+```
+
+Or build and run from this tree with a persistent `/data` volume:
 
 ```bash
 docker compose up --build -d
 ```
 
-Or `docker build -t cursorpace-sync .` and `docker run` with `-p 7050:7050` and `-v <volume>:/data`. Open `http://server:7050/login`. The first boot uses the default admin password `cursorpace01`; you must set a new password before tokens or backup are available.
+Open `http://server:7050/login`. The first boot uses the default admin password `cursorpace01`; you must set a new password before tokens or backup are available.
 
 ---
 

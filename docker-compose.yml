@@ -1,6 +1,7 @@
 services:
   sync:
     container_name: cp-sync
+    image: ghcr.io/wsj-br/cursorpace-syncserver:latest
     build: .
     ports: ["7050:7050"]
     volumes:

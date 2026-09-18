@@ -236,6 +236,7 @@ Dockerfile (single stage is fine):
 ```yaml
 services:
   sync:
+    image: ghcr.io/wsj-br/cursorpace-syncserver:latest
     build: .
     ports: ["7050:7050"]
     volumes:
@@ -244,7 +245,9 @@ volumes:
   sync-data:
 ```
 
-README must document: first-run steps, env vars, LAN URL for app Settings (e.g. `http://server:7050`), token creation flow, and backup/restore.
+Releases: `./scripts/release.sh` tags `v<VERSION>` from `app/version.py`. `.github/workflows/release.yml` publishes `linux/amd64` and `linux/arm64` images to `ghcr.io/<owner>/<repo>` and creates the GitHub Release from `release-notes/RELEASE_NOTES_<version>.md`.
+
+README must document: first-run steps, the GHCR image, env vars, LAN URL for app Settings (e.g. `http://server:7050`), token creation flow, and backup/restore.
 
 ## 11. Implementation order
 

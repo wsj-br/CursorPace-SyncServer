@@ -30,7 +30,10 @@ Treat `app/` and the tests as truth. Spec details live in `dev/sync-server-imple
 | `tests/` | pytest. |
 | `dev/` | `CHANGELOG.md`, `DEVEL.md`, implementation plan, release-notes prompt. |
 | `scripts/dev.sh` | Local uvicorn `--reload` using `DATA_DIR` / `PORT` (or `.env` / `.env.local`). |
+| `scripts/clean.sh` | Remove bytecode, pytest leftovers, and optional local `data/` / `.venv`. |
 | `scripts/set-version` | Print or set `VERSION` and refresh `BUILD_TIMESTAMP` in `app/version.py`. |
+| `scripts/release.sh` | Tag `v<VERSION>` at HEAD and trigger `.github/workflows/release.yml`. |
+| `.github/workflows/release.yml` | Tests, multi-arch image to GHCR, GitHub Release from notes. |
 | `Dockerfile` | `python:3.12-slim`, volume `/data`, healthcheck `/healthz`. |
 | `docker-compose.yml` | Example service on port 7050 with a named volume. |
 
@@ -68,10 +71,13 @@ If you change timestamp/decimal rules or cycle-winner / history-union, update an
 source .venv/bin/activate
 pip install -r requirements.txt
 ./scripts/dev.sh
+./scripts/clean.sh
 pytest -q
 python3 -m py_compile app/*.py tests/*.py
 ./scripts/set-version
 ./scripts/set-version 1.2.3
+./scripts/release.sh
+./scripts/release.sh --dry-run
 docker compose up --build -d
 docker build -t cursorpace-sync .
 ```
