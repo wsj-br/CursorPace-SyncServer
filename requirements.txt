@@ -6,4 +6,4 @@ itsdangerous==2.2.0
 httpx==0.28.1
 pytest==9.0.3
 python-multipart==0.0.31
-anyio==4.9.0
+anyio==4.14.2
