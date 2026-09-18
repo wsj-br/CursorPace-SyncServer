@@ -94,7 +94,8 @@ Automated tests don't cover the UI; verify by hand:
 
 ## 5. Publish a release
 
-Before tagging, refresh `requirements.txt` pins:
+Before preparing a new release, run `./scripts/upgrade-deps` to refresh the
+`requirements.txt` pins before tagging. Use `--dry-run` to preview changes:
 
 ```bash
 ./scripts/upgrade-deps --dry-run          # every pin to current PyPI
@@ -116,9 +117,6 @@ files if pytest fails.
    and pushes the tag; `.github/workflows/release.yml` then runs tests, publishes
    `ghcr.io/<owner>/<repo>:<version>` (and `latest`) to GHCR, and creates the
    GitHub Release from the notes file.
-
-The first GHCR package is private. After the first successful publish, set the
-package visibility to public in GitHub Packages if anonymous pulls should work.
 
 Re-running `./scripts/release.sh` for the same version deletes the existing
 GitHub release and tag, then retags HEAD.
@@ -161,6 +159,10 @@ docker compose up --build -d
 docker compose logs -f sync
 ```
 
+`docker-compose.yml` is the local development/example configuration. For a
+production deployment, use `production.yml` and follow the deployment
+instructions in `README.md`; it does not build from the working tree.
+
 ## Troubleshooting
 
 - `No module named pip` on minimal Ubuntu images: `apt-get install -y python3-venv python3-pip`,
@@ -173,6 +175,3 @@ docker compose logs -f sync
   created on the next boot and existing admin cookies no longer verify.
 - `curl` of `/` returns 303: expected — unauthenticated browsers
   redirect to `/login`.
-- GHCR pull denied: the first published package is private. Run
-  `docker login ghcr.io`, or set the package visibility to public in
-  GitHub Packages.

@@ -1,0 +1,12 @@
+services:
+  sync:
+    container_name: cp-sync
+    image: ghcr.io/wsj-br/cursorpace-syncserver:${CURSORPACE_VERSION:-latest}
+    restart: unless-stopped
+    ports:
+      - "${SYNC_PORT:-7050}:7050"
+    volumes:
+      - cp-sync-production-data:/data
+
+volumes:
+  cp-sync-production-data:

@@ -8,6 +8,12 @@ Add new entries in the `## [Unreleased]` section. When releasing, move those ent
 
 ## [Unreleased]
 
+- **Added**: docker - `production.yml` runs the published GHCR image with a persistent production volume and restart policy.
+- **Changed**: deps - `fastapi` 0.116.1 to 0.141.1.
+- **Changed**: deps - `uvicorn` 0.35.0 to 0.53.0.
+- **Changed**: deps - `aiosqlite` 0.20.0 to 0.22.1.
+- **Changed**: deps - `pytest` 9.0.3 to 9.1.1.
+- **Changed**: deps - `python-multipart` 0.0.31 to 0.0.32.
 - **Security**: deps - `anyio` 4.9.0 to 4.15.1.
 - **Added**: docker - Release workflow publishes `ghcr.io/wsj-br/cursorpace-syncserver` and creates the GitHub Release from `./scripts/release.sh`.
 - **Added**: scripts - `scripts/clean.sh` removes Python caches, pytest leftovers, and optional local `data/` / `.venv`.
