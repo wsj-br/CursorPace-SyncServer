@@ -1,8 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Token created — CursorPace Sync{% endblock %}
 {% block content %}
-<h1>Token created</h1>
-<p>Machine <strong>{{ device_name }}</strong> — copy this token now, it is shown only once:</p>
+<header class="page-header">
+  <div>
+    <h1>Token created</h1>
+    <p class="lede">Copy this secret for <strong>{{ device_name }}</strong> now. It cannot be shown again.</p>
+  </div>
+</header>
+
+<p class="alert alert-warn" role="status">Store the token in the machine’s CursorPace settings. Revoking later does not delete already-pushed samples.</p>
 <p><code class="token">{{ raw_token }}</code></p>
-<p><a href="/tokens">Back to tokens</a></p>
+<div class="btn-row">
+  <button class="btn" type="button" data-copy="{{ raw_token }}">Copy token</button>
+  <a class="btn btn-secondary" href="/tokens">Back to tokens</a>
+</div>
 {% endblock %}

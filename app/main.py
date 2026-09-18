@@ -24,9 +24,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
+from uvicorn.logging import AccessFormatter, DefaultFormatter
 
 from . import backup as backup_mod
 from . import db as db_mod
+from . import ui as ui_mod
 from .auth import (
     SESSION_COOKIE,
     create_session_value,
@@ -50,8 +52,19 @@ logger = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(HERE / "templates"))
+TEMPLATES.env.filters["utc_display"] = ui_mod.format_utc_display
+TEMPLATES.env.filters["utc_iso"] = ui_mod.format_utc_iso
+TEMPLATES.env.filters["relative"] = ui_mod.format_relative
+TEMPLATES.env.filters["cycle_display"] = ui_mod.format_cycle_display
+TEMPLATES.env.filters["status_mod"] = ui_mod.status_modifier
+TEMPLATES.env.filters["intfmt"] = ui_mod.format_int
 
 INVALID_TOKEN_DETAIL = "Invalid or missing API token"
+_CONSOLE_TIME_FMT = "%H:%M:%S"
+_UVICORN_DEFAULT_FMT = "%(levelprefix)s %(asctime)s %(message)s"
+_UVICORN_ACCESS_FMT = (
+    '%(levelprefix)s %(asctime)s %(client_addr)s - "%(request_line)s" %(status_code)s'
+)
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +94,22 @@ class PushIn(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def enable_console_timestamps() -> None:
+    """Add a local HH:MM:SS prefix to uvicorn error and access logs."""
+    replacements: dict[str, tuple[type[logging.Formatter], str]] = {
+        "uvicorn": (DefaultFormatter, _UVICORN_DEFAULT_FMT),
+        "uvicorn.error": (DefaultFormatter, _UVICORN_DEFAULT_FMT),
+        "uvicorn.access": (AccessFormatter, _UVICORN_ACCESS_FMT),
+    }
+    for name, (formatter_cls, fmt) in replacements.items():
+        uv_logger = logging.getLogger(name)
+        for handler in uv_logger.handlers:
+            use_colors = getattr(handler.formatter, "use_colors", None)
+            handler.setFormatter(
+                formatter_cls(fmt=fmt, datefmt=_CONSOLE_TIME_FMT, use_colors=use_colors)
+            )
 
 
 def presence_status(last_seen_utc: str | None, now: datetime | None = None) -> str:
@@ -143,12 +172,28 @@ def require_admin_redirect(request: Request) -> bool:
     return is_admin(request)
 
 
+def _html(
+    request: Request,
+    template_name: str,
+    active_page: str,
+    status_code: int = 200,
+    **context: Any,
+) -> HTMLResponse:
+    return TEMPLATES.TemplateResponse(
+        request,
+        template_name,
+        {"active_page": active_page, **context},
+        status_code=status_code,
+    )
+
+
 # ---------------------------------------------------------------------------
 # App factory
 # ---------------------------------------------------------------------------
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
+    enable_console_timestamps()
     resolved = settings or get_settings()
 
     @asynccontextmanager
@@ -338,9 +383,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_get(request: Request):
-        return TEMPLATES.TemplateResponse(
-            "login.html", {"request": request, "error": None}
-        )
+        return TEMPLATES.TemplateResponse(request, "login.html", {"error": None})
 
     @app.post("/login", response_class=HTMLResponse)
     async def login_post(request: Request, password: str = Form(default="")):
@@ -349,8 +392,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ok = stored is not None and verify_admin_password(password, stored)
         if not ok:
             return TEMPLATES.TemplateResponse(
+                request,
                 "login.html",
-                {"request": request, "error": "Wrong password"},
+                {"error": "Wrong password"},
                 status_code=200,
             )
         resp = RedirectResponse("/", status_code=303)
@@ -374,22 +418,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return RedirectResponse("/login", status_code=303)
         async with _open_db(resolved) as conn:
             devices = await db_mod.list_devices(conn)
-            stored_start, stored_active, _ = await _read_cycle_state(conn)
+            stored_start, stored_active, stored_history = await _read_cycle_state(conn)
             total = await db_mod.count_samples(conn)
-        last_push = None
+            earliest, latest = await db_mod.sample_bounds(conn)
+        last_activity = None
         seen_times = [d.last_seen_utc for d in devices if d.last_seen_utc]
         if seen_times:
-            last_push = max(seen_times)
-        return TEMPLATES.TemplateResponse(
+            last_activity = max(seen_times)
+        rows = _device_rows(devices)
+        active_count = sum(1 for r in rows if r["status"] == "Active")
+        return _html(
+            request,
             "dashboard.html",
-            {
-                "request": request,
-                "device_count": len(devices),
-                "total_samples": total,
-                "active_cycle": stored_active,
-                "cycle_start_utc": stored_start,
-                "last_push": last_push,
-            },
+            "dashboard",
+            device_count=len(devices),
+            total_samples=total,
+            active_cycle=stored_active,
+            cycle_start_utc=stored_start,
+            last_activity=last_activity,
+            history_count=len(stored_history),
+            active_count=active_count,
+            earliest=earliest,
+            latest=latest,
         )
 
     @app.get("/tokens", response_class=HTMLResponse)
@@ -398,9 +448,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return RedirectResponse("/login", status_code=303)
         async with _open_db(resolved) as conn:
             devices = await db_mod.list_devices(conn)
-        return TEMPLATES.TemplateResponse(
+        return _html(
+            request,
             "tokens.html",
-            {"request": request, "devices": _device_rows(devices), "new_token": None},
+            "tokens",
+            devices=_device_rows(devices),
+            error=None,
+            name="",
         )
 
     @app.post("/tokens", response_class=HTMLResponse)
@@ -411,14 +465,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not clean or len(clean) > 64:
             async with _open_db(resolved) as conn:
                 devices = await db_mod.list_devices(conn)
-            return TEMPLATES.TemplateResponse(
+            return _html(
+                request,
                 "tokens.html",
-                {
-                    "request": request,
-                    "devices": _device_rows(devices),
-                    "new_token": None,
-                    "error": "Name must be 1-64 characters",
-                },
+                "tokens",
+                status_code=200,
+                devices=_device_rows(devices),
+                error="Name must be 1-64 characters",
+                name=name,
             )
         raw, token_hash, prefix = generate_token()
         now = utc_now_canonical()
@@ -431,14 +485,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 created_utc=now,
             )
             await conn.commit()
-        return TEMPLATES.TemplateResponse(
+        return _html(
+            request,
             "token_created.html",
-            {
-                "request": request,
-                "raw_token": raw,
-                "device_name": clean,
-                "device_id": new_id,
-            },
+            "tokens",
+            raw_token=raw,
+            device_name=clean,
+            device_id=new_id,
         )
 
     @app.post("/tokens/{device_id}/delete")
@@ -456,9 +509,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return RedirectResponse("/login", status_code=303)
         async with _open_db(resolved) as conn:
             devices = await db_mod.list_devices(conn)
-        return TEMPLATES.TemplateResponse(
+        return _html(
+            request,
             "machines.html",
-            {"request": request, "devices": _device_rows(devices)},
+            "machines",
+            devices=_device_rows(devices),
         )
 
     @app.get("/data", response_class=HTMLResponse)
@@ -467,29 +522,28 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return RedirectResponse("/login", status_code=303)
         async with _open_db(resolved) as conn:
             _, stored_active, stored_history = await _read_cycle_state(conn)
-            samples = await db_mod.get_all_samples(conn)
-        earliest = samples[0]["ts"] if samples else None
-        latest = samples[-1]["ts"] if samples else None
-        return TEMPLATES.TemplateResponse(
+            sample_count = await db_mod.count_samples(conn)
+            earliest, latest = await db_mod.sample_bounds(conn)
+            recent = await db_mod.get_recent_samples(conn, 20)
+        return _html(
+            request,
             "data.html",
-            {
-                "request": request,
-                "active_cycle": stored_active,
-                "history_count": len(stored_history),
-                "history": stored_history,
-                "sample_count": len(samples),
-                "earliest": earliest,
-                "latest": latest,
-                "recent": samples[-20:][::-1],
-            },
+            "data",
+            active_cycle=stored_active,
+            history_count=len(stored_history),
+            history=stored_history,
+            sample_count=sample_count,
+            earliest=earliest,
+            latest=latest,
+            recent=recent,
         )
 
     @app.get("/backup", response_class=HTMLResponse)
     async def backup_page(request: Request):
         if not require_admin_redirect(request):
             return RedirectResponse("/login", status_code=303)
-        return TEMPLATES.TemplateResponse(
-            "backup.html", {"request": request, "message": None, "error": None}
+        return _html(
+            request, "backup.html", "backup", message=None, error=None
         )
 
     @app.get("/backup/export")
@@ -524,9 +578,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             parsed = backup_mod.parse_import_zip(raw)
         except ValueError as exc:
-            return TEMPLATES.TemplateResponse(
+            return _html(
+                request,
                 "backup.html",
-                {"request": request, "message": None, "error": str(exc)},
+                "backup",
+                message=None,
+                error=str(exc),
             )
         samples = parsed["samples"]
         assert isinstance(samples, list)
@@ -559,16 +616,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 conn, "cycle_history", json.dumps(parsed["cycle_history"])
             )
             await conn.commit()
-        return TEMPLATES.TemplateResponse(
+        return _html(
+            request,
             "backup.html",
-            {
-                "request": request,
-                "message": (
-                    f"Imported {len(samples)} samples, "
-                    f"{len(parsed['cycle_history']) if isinstance(parsed['cycle_history'], list) else 0} history entries."
-                ),
-                "error": None,
-            },
+            "backup",
+            message=(
+                f"Imported {len(samples)} samples, "
+                f"{len(parsed['cycle_history']) if isinstance(parsed['cycle_history'], list) else 0} history entries."
+            ),
+            error=None,
         )
 
     # Store lifespan manually for older TestClient without lifespan support:

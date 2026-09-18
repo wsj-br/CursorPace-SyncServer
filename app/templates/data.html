@@ -1,27 +1,81 @@
 {% extends "base.html" %}
+{% from "_macros.html" import utc_when, cycle_when, empty_state %}
 {% block title %}Data — CursorPace Sync{% endblock %}
 {% block content %}
-<h1>Data</h1>
-{% if active_cycle %}
-<p>Active cycle: {{ active_cycle.cycle_start }} → {{ active_cycle.next_renewal }}</p>
-{% else %}
-<p>No active cycle.</p>
-{% endif %}
-<p>History entries: {{ history_count }} · Samples: {{ sample_count }}</p>
-{% if earliest %}<p>Range: {{ earliest }} → {{ latest }}</p>{% endif %}
-<h2>History</h2>
-<ul>
-{% for h in history %}
-  <li>{{ h.cycle_start }} → {{ h.next_renewal }}</li>
-{% endfor %}
-</ul>
-<h2>Last 20 samples</h2>
-<table>
-  <thead><tr><th>ts</th><th>cursor</th><th>other</th></tr></thead>
-  <tbody>
-  {% for s in recent %}
-    <tr><td>{{ s.ts }}</td><td>{{ s.cursor }}</td><td>{{ s.other }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+<header class="page-header">
+  <div>
+    <h1>Data</h1>
+    <p class="lede">Canonical samples and cycle bounds shared by every connected machine.</p>
+  </div>
+</header>
+
+<div class="cards">
+  <article class="card">
+    <h2>Samples</h2>
+    <p class="metric">{{ sample_count|intfmt }}</p>
+    <p class="muted">
+      {% if earliest %}
+        {{ utc_when(earliest, compact=True) }} – {{ utc_when(latest, compact=True) }}
+      {% else %}
+        No samples stored
+      {% endif %}
+    </p>
+  </article>
+  <article class="card">
+    <h2>Active cycle</h2>
+    {% if active_cycle %}
+      <p>{{ cycle_when(active_cycle.cycle_start) }}</p>
+      <p class="muted">Renews {{ cycle_when(active_cycle.next_renewal) }}</p>
+      <p class="account-note">Account time, not converted to this browser</p>
+    {% else %}
+      <p class="muted">None</p>
+    {% endif %}
+  </article>
+  <article class="card">
+    <h2>History</h2>
+    <p class="metric">{{ history_count|intfmt }}</p>
+    <p class="muted">Closed cycles kept for the account</p>
+  </article>
+</div>
+
+<section class="panel">
+  <h2>Past cycles</h2>
+  {% if history %}
+    <ul>
+    {% for h in history %}
+      <li>{{ cycle_when(h.cycle_start) }} → {{ cycle_when(h.next_renewal) }}</li>
+    {% endfor %}
+    </ul>
+  {% else %}
+    {{ empty_state("No cycle history", "History appears after machines report previous billing cycles.") }}
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Last 20 samples</h2>
+  {% if recent %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Cursor %</th>
+          <th>Other %</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for s in recent %}
+        <tr>
+          <td>{{ utc_when(s.ts) }}</td>
+          <td>{{ s.cursor }}</td>
+          <td>{{ s.other }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    {{ empty_state("No samples yet", "Samples land here after a machine pushes usage data.") }}
+  {% endif %}
+</section>
 {% endblock %}

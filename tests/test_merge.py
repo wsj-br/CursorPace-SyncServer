@@ -64,6 +64,22 @@ def test_pick_active_cycle_newest_wins():
     assert pick_active_cycle(a, b) == b
     # Full tie keeps stored.
     assert pick_active_cycle(a, dict(a)) == a
+    # Mixed naive vs Z/offset must not raise (desktop may send either).
+    with_z = {
+        "cycle_start": "2026-08-15T01:00:00Z",
+        "next_renewal": "2026-09-15T01:00:00Z",
+    }
+    with_offset = {
+        "cycle_start": "2026-08-15T01:00:00+01:00",
+        "next_renewal": "2026-09-15T01:00:00+01:00",
+    }
+    assert pick_active_cycle(a, with_z) == a
+    assert pick_active_cycle(a, with_offset) == a
+    later_aware = {
+        "cycle_start": "2026-09-15T01:00:00+01:00",
+        "next_renewal": "2026-10-15T01:00:00+01:00",
+    }
+    assert pick_active_cycle(a, later_aware) == later_aware
 
 
 def test_union_cycle_history_one_per_start_date():

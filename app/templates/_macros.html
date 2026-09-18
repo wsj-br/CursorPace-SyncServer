@@ -1,0 +1,36 @@
+{% macro utc_when(value, relative=False, empty="Never", compact=False, metric=False) %}
+  {% if value %}
+    <span class="when{% if compact %} when-compact{% endif %}">
+      {% if relative %}<span class="{% if metric %}metric {% endif %}when-rel" data-relative>{{ value|relative }}</span>{% endif %}
+      <time datetime="{{ value|utc_iso }}" data-utc>{{ value|utc_display }}</time>
+    </span>
+  {% else %}
+    {% if metric %}<p class="metric">{{ empty }}</p>{% endif %}
+    <span class="muted">{{ empty if not metric else "No machine has checked in" }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro cycle_when(value, empty="None") %}
+  {% if value %}
+    <time datetime="{{ value }}">{{ value|cycle_display }}</time>
+  {% else %}
+    <span class="muted">{{ empty }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro status_chip(status) %}
+  <span class="chip chip-{{ status|status_mod }}">{{ status }}</span>
+{% endmacro %}
+
+{% macro alert(kind, message) %}
+  {% if message %}
+    <p class="alert alert-{{ kind }}" role="status">{{ message }}</p>
+  {% endif %}
+{% endmacro %}
+
+{% macro empty_state(title, body) %}
+  <div class="empty">
+    <p class="empty-title">{{ title }}</p>
+    <p class="muted">{{ body }}</p>
+  </div>
+{% endmacro %}

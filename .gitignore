@@ -3,3 +3,17 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/
+*.log
+*.tmp
+*.zip
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.db-lock
+*.db-trace
+*.db-trace-lock
+*.db-trace-wal
+*.db-trace-journal
+.env*
+!.envrc

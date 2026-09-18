@@ -1,25 +1,58 @@
 {% extends "base.html" %}
+{% from "_macros.html" import utc_when, status_chip, alert, empty_state %}
 {% block title %}Tokens — CursorPace Sync{% endblock %}
 {% block content %}
-<h1>API tokens</h1>
-{% if error %}<p class="error">{{ error }}</p>{% endif %}
-<form method="post" action="/tokens">
-  <label>Machine name <input name="name" maxlength="64" required /></label>
-  <button type="submit">Generate token</button>
-</form>
-<table>
-  <thead><tr><th>Name</th><th>Prefix</th><th>Created</th><th>Last seen</th><th>Status</th><th></th></tr></thead>
-  <tbody>
-  {% for d in devices %}
-    <tr>
-      <td>{{ d.name }}</td>
-      <td><code>{{ d.token_prefix }}</code></td>
-      <td>{{ d.created_utc }}</td>
-      <td>{{ d.last_seen_utc or "never" }}</td>
-      <td><span class="chip">{{ d.status }}</span></td>
-      <td><form method="post" action="/tokens/{{ d.id }}/delete"><button type="submit">Revoke</button></form></td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<header class="page-header">
+  <div>
+    <h1>API tokens</h1>
+    <p class="lede">One token per machine. The raw secret is shown only at creation.</p>
+  </div>
+</header>
+
+{{ alert("error", error) }}
+
+<section class="panel">
+  <h2>Generate token</h2>
+  <form class="form-row" method="post" action="/tokens">
+    <label>Machine name
+      <input type="text" name="name" maxlength="64" required value="{{ name or '' }}" />
+    </label>
+    <button class="btn" type="submit">Generate token</button>
+  </form>
+</section>
+
+{% if devices %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Prefix</th>
+        <th>Created</th>
+        <th>Last seen</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for d in devices %}
+      <tr>
+        <td>{{ d.name }}</td>
+        <td><code>{{ d.token_prefix }}</code></td>
+        <td>{{ utc_when(d.created_utc) }}</td>
+        <td>{{ utc_when(d.last_seen_utc, relative=True) }}</td>
+        <td>{{ status_chip(d.status) }}</td>
+        <td>
+          <form method="post" action="/tokens/{{ d.id }}/delete" onsubmit="return confirm('Revoke the token for {{ d.name }}? The machine will lose access immediately.');">
+            <button class="btn btn-danger" type="submit">Revoke</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  {{ empty_state("No tokens yet", "Create a machine token, then paste it into that CursorPace app’s sync settings.") }}
+{% endif %}
 {% endblock %}

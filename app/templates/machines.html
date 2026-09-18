@@ -1,19 +1,40 @@
 {% extends "base.html" %}
+{% from "_macros.html" import utc_when, status_chip, empty_state %}
 {% block title %}Machines — CursorPace Sync{% endblock %}
 {% block content %}
-<h1>Machines</h1>
-<table>
-  <thead><tr><th>Name</th><th>Status</th><th>Last seen</th><th>Samples at last contact</th><th>Last push size</th></tr></thead>
-  <tbody>
-  {% for d in devices %}
-    <tr>
-      <td>{{ d.name }}</td>
-      <td><span class="chip">{{ d.status }}</span></td>
-      <td>{{ d.last_seen_utc or "never" }}</td>
-      <td>{{ d.last_sample_count }}</td>
-      <td>{{ d.last_push_count }}</td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+<header class="page-header">
+  <div>
+    <h1>Machines</h1>
+    <p class="lede">Presence is based on the last authenticated push or pull from each token.</p>
+  </div>
+</header>
+
+{% if devices %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Last seen</th>
+        <th>Samples at last contact</th>
+        <th>Last push size</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for d in devices %}
+      <tr>
+        <td>{{ d.name }}</td>
+        <td>{{ status_chip(d.status) }}</td>
+        <td>{{ utc_when(d.last_seen_utc, relative=True) }}</td>
+        <td>{{ d.last_sample_count|intfmt }}</td>
+        <td>{{ d.last_push_count|intfmt }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  {{ empty_state("No machines yet", "Generate a token, then wait for that machine to push or pull.") }}
+{% endif %}
 {% endblock %}

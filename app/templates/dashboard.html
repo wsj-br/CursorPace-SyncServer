@@ -1,16 +1,73 @@
 {% extends "base.html" %}
+{% from "_macros.html" import utc_when, cycle_when, empty_state %}
 {% block title %}Dashboard — CursorPace Sync{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-<div class="cards">
-  <div class="card"><h2>Devices</h2><p>{{ device_count }}</p></div>
-  <div class="card"><h2>Total samples</h2><p>{{ total_samples }}</p></div>
-  <div class="card"><h2>Active cycle</h2>
-    {% if active_cycle %}<p>{{ active_cycle.cycle_start }} → {{ active_cycle.next_renewal }}</p>
-    {% else %}<p>None</p>{% endif %}
-    <p class="muted">{{ cycle_start_utc or "no cycle_start_utc" }}</p>
+<header class="page-header">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="lede">Canonical usage across the machines sharing this CursorPace account.</p>
   </div>
-  <div class="card"><h2>Last push</h2><p>{{ last_push or "never" }}</p></div>
+  <div class="page-actions">
+    <a class="btn" href="/tokens">Manage tokens</a>
+    <a class="btn btn-secondary" href="/data">View data</a>
+  </div>
+</header>
+
+<div class="cards">
+  <article class="card">
+    <h2>Devices</h2>
+    <p class="metric">{{ device_count|intfmt }}</p>
+    <p class="muted">{{ active_count|intfmt }} active now</p>
+  </article>
+  <article class="card">
+    <h2>Total samples</h2>
+    <p class="metric">{{ total_samples|intfmt }}</p>
+    <p class="muted">
+      {% if earliest %}
+        {{ utc_when(earliest, compact=True) }} – {{ utc_when(latest, compact=True) }}
+      {% else %}
+        No samples yet
+      {% endif %}
+    </p>
+  </article>
+  <article class="card">
+    <h2>Last activity</h2>
+    {{ utc_when(last_activity, relative=True, metric=True) }}
+  </article>
+  <article class="card">
+    <h2>Cycle history</h2>
+    <p class="metric">{{ history_count|intfmt }}</p>
+    <p class="muted">Past billing cycles on this account</p>
+  </article>
 </div>
-<p><a href="/tokens">Manage tokens</a> · <a href="/data">View data</a> · <a href="/backup">Backup</a></p>
+
+<section class="panel">
+  <h2>Active cycle</h2>
+  {% if active_cycle %}
+    <div class="cycle-range">
+      <div>
+        <p class="muted account-note">Start · account time</p>
+        <p>{{ cycle_when(active_cycle.cycle_start) }}</p>
+      </div>
+      <span class="arrow" aria-hidden="true">→</span>
+      <div>
+        <p class="muted account-note">Renewal · account time</p>
+        <p>{{ cycle_when(active_cycle.next_renewal) }}</p>
+      </div>
+    </div>
+    <p class="account-note">Cycle start instant {{ utc_when(cycle_start_utc, empty="not recorded") }}</p>
+  {% else %}
+    {{ empty_state("No active cycle", "A cycle will appear after the first successful machine push.") }}
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Quick actions</h2>
+  <div class="quick-actions">
+    <a href="/tokens"><strong>Tokens</strong><span class="muted">Create or revoke machine credentials</span></a>
+    <a href="/machines"><strong>Machines</strong><span class="muted">See presence and last contact</span></a>
+    <a href="/data"><strong>Data</strong><span class="muted">Inspect cycles and recent samples</span></a>
+    <a href="/backup"><strong>Backup</strong><span class="muted">Export or replace the dataset</span></a>
+  </div>
+</section>
 {% endblock %}

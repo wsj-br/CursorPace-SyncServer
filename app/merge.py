@@ -89,14 +89,16 @@ def pick_cycle_start_utc(
 
 def _parse_local(value: str) -> datetime:
     # Local wall-clock ISO without offset, e.g. 2026-08-15T01:00:00.
-    # Be lenient: ignore a trailing Z / offset if present.
+    # Be lenient: ignore a trailing Z / offset if present, then compare as
+    # naive wall-clock (spec 6.3.3 — machines share one Cursor account).
     text = value.strip()
     if text.endswith("Z"):
-        text = text[:-1]
+        text = text[:-1] + "+00:00"
     try:
-        return datetime.fromisoformat(text.replace("Z", ""))
+        dt = datetime.fromisoformat(text)
     except ValueError as exc:
         raise ValueError(f"unparseable local datetime: {value!r}") from exc
+    return dt.replace(tzinfo=None)
 
 
 def pick_active_cycle(

@@ -1,13 +1,32 @@
 {% extends "base.html" %}
+{% from "_macros.html" import alert %}
 {% block title %}Backup — CursorPace Sync{% endblock %}
 {% block content %}
-<h1>Backup</h1>
-{% if message %}<p class="ok">{{ message }}</p>{% endif %}
-{% if error %}<p class="error">{{ error }}</p>{% endif %}
-<p><a href="/backup/export"><button>Export backup (.zip)</button></a></p>
-<h2>Import</h2>
-<form method="post" action="/backup/import" enctype="multipart/form-data">
-  <input type="file" name="file" accept=".zip" required />
-  <button type="submit">Import</button>
-</form>
+<header class="page-header">
+  <div>
+    <h1>Backup</h1>
+    <p class="lede">Export the canonical dataset, or replace it from a CursorPace backup zip.</p>
+  </div>
+</header>
+
+{{ alert("ok", message) }}
+{{ alert("error", error) }}
+
+<div class="split">
+  <section class="panel">
+    <h2>Export</h2>
+    <p class="muted">Downloads a zip with <code>manifest.json</code>, <code>settings.json</code>, and <code>usage-samples.json</code>.</p>
+    <p><a class="btn" href="/backup/export">Export backup (.zip)</a></p>
+  </section>
+  <section class="panel">
+    <h2>Import</h2>
+    <p class="alert alert-warn">Import replaces the current samples and cycle metadata in one transaction. Tokens are not changed.</p>
+    <form class="stack" method="post" action="/backup/import" enctype="multipart/form-data">
+      <label>Backup zip
+        <input type="file" name="file" accept=".zip" required />
+      </label>
+      <button class="btn btn-danger" type="submit">Import and replace</button>
+    </form>
+  </section>
+</div>
 {% endblock %}

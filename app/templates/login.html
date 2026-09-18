@@ -4,16 +4,29 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Login — CursorPace Sync</title>
+  <link rel="icon" href="/static/cursor_pace.ico" sizes="any" />
+  <link rel="icon" type="image/png" href="/static/cursor_pace.png" />
+  <link rel="apple-touch-icon" href="/static/cursor_pace.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <main>
-    <h1>Admin login</h1>
-    {% if error %}<p class="error">{{ error }}</p>{% endif %}
-    <form method="post" action="/login">
-      <label>Password <input type="password" name="password" autofocus /></label>
-      <button type="submit">Sign in</button>
-    </form>
+  <main class="login-shell">
+    <section class="card login-card">
+      <img class="login-mark" src="/static/cursor_pace.png" width="72" height="72" alt="CursorPace" />
+      <p class="muted">CursorPace Sync</p>
+      <h1>Admin login</h1>
+      <p class="lede">Sign in to review machines, tokens, and canonical usage data.</p>
+      {% if error %}<p class="alert alert-error" role="alert">{{ error }}</p>{% endif %}
+      <form method="post" action="/login">
+        <label>Password
+          <input type="password" name="password" autocomplete="current-password" autofocus />
+        </label>
+        <button class="btn" type="submit">Sign in</button>
+      </form>
+    </section>
   </main>
 </body>
 </html>

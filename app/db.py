@@ -85,6 +85,27 @@ async def count_samples(db: aiosqlite.Connection) -> int:
     return int(row[0]) if row else 0
 
 
+async def sample_bounds(
+    db: aiosqlite.Connection,
+) -> tuple[str | None, str | None]:
+    async with db.execute("SELECT MIN(ts), MAX(ts) FROM samples") as cur:
+        row = await cur.fetchone()
+    if not row or not row[0]:
+        return None, None
+    return str(row[0]), str(row[1])
+
+
+async def get_recent_samples(
+    db: aiosqlite.Connection, limit: int = 20
+) -> list[dict[str, str]]:
+    async with db.execute(
+        "SELECT ts, cursor, other FROM samples ORDER BY ts DESC LIMIT ?",
+        (limit,),
+    ) as cur:
+        rows = await cur.fetchall()
+    return [{"ts": r[0], "cursor": r[1], "other": r[2]} for r in rows]
+
+
 async def insert_samples_ignore(
     db: aiosqlite.Connection,
     samples: list[tuple[str, str, str, str]],
