@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — CursorPace Sync{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<div class="cards">
+  <div class="card"><h2>Devices</h2><p>{{ device_count }}</p></div>
+  <div class="card"><h2>Total samples</h2><p>{{ total_samples }}</p></div>
+  <div class="card"><h2>Active cycle</h2>
+    {% if active_cycle %}<p>{{ active_cycle.cycle_start }} → {{ active_cycle.next_renewal }}</p>
+    {% else %}<p>None</p>{% endif %}
+    <p class="muted">{{ cycle_start_utc or "no cycle_start_utc" }}</p>
+  </div>
+  <div class="card"><h2>Last push</h2><p>{{ last_push or "never" }}</p></div>
+</div>
+<p><a href="/tokens">Manage tokens</a> · <a href="/data">View data</a> · <a href="/backup">Backup</a></p>
+{% endblock %}

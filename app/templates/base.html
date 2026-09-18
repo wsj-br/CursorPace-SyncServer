@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}CursorPace Sync{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <nav>
+    <strong>CursorPace Sync</strong>
+    <a href="/">Dashboard</a>
+    <a href="/tokens">Tokens</a>
+    <a href="/machines">Machines</a>
+    <a href="/data">Data</a>
+    <a href="/backup">Backup</a>
+    <form method="post" action="/logout" style="display:inline"><button type="submit">Logout</button></form>
+  </nav>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

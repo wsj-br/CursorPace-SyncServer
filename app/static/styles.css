@@ -1,0 +1,12 @@
+body { font-family: system-ui, sans-serif; margin: 0; color: #1a1a1a; }
+nav { display: flex; gap: 1rem; align-items: center; padding: 0.75rem 1rem; background: #111; color: #fff; }
+nav a { color: #9ecbff; text-decoration: none; }
+main { padding: 1.5rem; max-width: 960px; margin: 0 auto; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+.card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; }
+.muted { color: #666; font-size: 0.85em; }
+table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+.error { color: #b00020; } .ok { color: #0a7a2f; }
+.chip { background: #eee; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.85em; }
+.token { font-size: 1.1em; background: #f6f6f6; padding: 0.5rem; display: inline-block; }

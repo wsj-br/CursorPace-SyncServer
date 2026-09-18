@@ -1,0 +1,11 @@
+services:
+  sync:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      ADMIN_PASSWORD: "change-me"
+      SECRET_KEY: "long-random-string"
+    volumes:
+      - sync-data:/data
+volumes:
+  sync-data:

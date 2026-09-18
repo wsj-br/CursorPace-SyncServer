@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Token created — CursorPace Sync{% endblock %}
+{% block content %}
+<h1>Token created</h1>
+<p>Machine <strong>{{ device_name }}</strong> — copy this token now, it is shown only once:</p>
+<p><code class="token">{{ raw_token }}</code></p>
+<p><a href="/tokens">Back to tokens</a></p>
+{% endblock %}

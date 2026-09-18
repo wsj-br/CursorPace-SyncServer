@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Data — CursorPace Sync{% endblock %}
+{% block content %}
+<h1>Data</h1>
+{% if active_cycle %}
+<p>Active cycle: {{ active_cycle.cycle_start }} → {{ active_cycle.next_renewal }}</p>
+{% else %}
+<p>No active cycle.</p>
+{% endif %}
+<p>History entries: {{ history_count }} · Samples: {{ sample_count }}</p>
+{% if earliest %}<p>Range: {{ earliest }} → {{ latest }}</p>{% endif %}
+<h2>History</h2>
+<ul>
+{% for h in history %}
+  <li>{{ h.cycle_start }} → {{ h.next_renewal }}</li>
+{% endfor %}
+</ul>
+<h2>Last 20 samples</h2>
+<table>
+  <thead><tr><th>ts</th><th>cursor</th><th>other</th></tr></thead>
+  <tbody>
+  {% for s in recent %}
+    <tr><td>{{ s.ts }}</td><td>{{ s.cursor }}</td><td>{{ s.other }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
