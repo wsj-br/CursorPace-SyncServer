@@ -8,10 +8,10 @@ Lightweight server letting multiple CursorPace desktop instances share usage dat
    ```bash
    docker compose up --build -d
    ```
-2. Open `http://server:8080/login` and sign in with the default password
+2. Open `http://server:7050/login` and sign in with the default password
    `cursorpace01`. You'll be asked to choose a new admin password immediately.
 3. Go to **Tokens** → create a token per machine (raw token is shown once).
-4. In each CursorPace app Settings, set the sync URL to `http://server:8080`
+4. In each CursorPace app Settings, set the sync URL to `http://server:7050`
    and paste that machine's token.
 
 Or run locally:
@@ -19,20 +19,19 @@ Or run locally:
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-SECRET_KEY=dev-secret DATA_DIR=./data PORT=8080 \
-  uvicorn app.main:app --reload
+./scripts/dev.sh
 ```
 
 ## Env vars
 
 | Var | Required | Default | Meaning |
 |---|---|---|---|
-| `SECRET_KEY` | no | random per boot (warn) | Signs admin session cookies; set for stable logins. |
-| `DATA_DIR` | no | `/data` | SQLite file `sync.db` lives here; keep as a volume. |
-| `PORT` | no | `8080` | Listen port. |
+| `DATA_DIR` | no | `/data` | SQLite file `sync.db` and session file `.secret_key` live here; keep as a volume. |
+| `PORT` | no | `7050` | Listen port. |
 
 The first boot stores a hash of the default admin password `cursorpace01`.
-That password cannot be used past the change-password step.
+That password cannot be used past the change-password step. A random session
+secret is written to `$DATA_DIR/.secret_key` (mode `0600`) if that file is missing.
 
 ## API summary
 

@@ -79,6 +79,9 @@ body {
 
 body {
   margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   color: var(--ink);
   font-family: var(--font);
   font-size: 1.02rem;
@@ -197,6 +200,47 @@ a:hover {
 main {
   width: min(1120px, calc(100% - 2rem));
   margin: 1.6rem auto 3rem;
+  flex: 1 0 auto;
+}
+
+.site-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  justify-content: center;
+  align-items: center;
+  padding: 0.55rem 1rem 0.85rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.site-footer a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.site-footer-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.site-footer-octocat {
+  width: 0.85em;
+  height: 0.85em;
+  display: block;
+}
+
+.site-footer-sep {
+  opacity: 0.55;
 }
 
 .page-header {
@@ -573,10 +617,12 @@ a.btn-secondary:hover {
 }
 
 .login-shell {
-  min-height: 100vh;
+  flex: 1 0 auto;
   display: grid;
   place-items: center;
   padding: 1.5rem;
+  width: min(1120px, calc(100% - 2rem));
+  margin: 0 auto;
 }
 
 .login-card {

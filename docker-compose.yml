@@ -1,10 +1,9 @@
 services:
   sync:
+    container_name: cp-sync
     build: .
-    ports: ["8080:8080"]
-    environment:
-      SECRET_KEY: "long-random-string"
+    ports: ["7050:7050"]
     volumes:
-      - sync-data:/data
+      - cp-sync-data:/data
 volumes:
-  sync-data:
+  cp-sync-data:

@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 data/
+.secret_key
 *.log
 *.tmp
 *.zip
@@ -17,3 +18,4 @@ data/
 *.db-trace-journal
 .env*
 !.envrc
+app/BUILD_TIMESTAMP

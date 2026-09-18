@@ -21,18 +21,27 @@ pip install -r requirements.txt
 ## 2. Run the server locally
 
 ```bash
-SECRET_KEY=dev-secret DATA_DIR=./data PORT=8080 \
-  uvicorn app.main:app --reload
+./scripts/dev.sh
 ```
 
-Then open `http://127.0.0.1:8080/login` and sign in with `cursorpace01`.
+`scripts/dev.sh` uses `$DATA_DIR` and `$PORT` from the environment (or
+`.env` / `.env.local`), defaulting to `./data` and `7050`, and enables
+uvicorn `--reload`.
+
+To change the version shown in the UI footer:
+
+```bash
+./scripts/set-version          # current version and build timestamp
+./scripts/set-version 1.2.3
+```
+
+Then open `http://127.0.0.1:7050/login` and sign in with `cursorpace01`.
 The first login asks you to choose a new admin password.
 
 | Env var | Meaning |
 |---|---|
-| `SECRET_KEY` | Signs admin session cookies; set it or logins reset on restart |
-| `DATA_DIR` | Directory holding `sync.db` (default `/data`) |
-| `PORT` | Listen port (default `8080`) |
+| `DATA_DIR` | Directory holding `sync.db` and `.secret_key` (default `/data`) |
+| `PORT` | Listen port (default `7050`) |
 
 To simulate a second machine, create a token per machine under **Tokens** and
 use each token as `Authorization: Bearer <token>` against `/api/v1/push` and
@@ -78,8 +87,7 @@ Automated tests don't cover the UI; verify by hand:
 
 ```bash
 docker build -t cursorpace-sync .
-docker run --rm -p 8080:8080 \
-  -e SECRET_KEY=long-random-string \
+docker run --rm -p 7050:7050 \
   -v sync-data:/data \
   cursorpace-sync
 ```
@@ -87,7 +95,7 @@ docker run --rm -p 8080:8080 \
 Verify:
 
 ```bash
-curl http://127.0.0.1:8080/healthz   # {"status":"ok"}
+curl http://127.0.0.1:7050/healthz   # {"status":"ok"}
 docker inspect --format='{{json .State.Health.Status}}' <container>
 ```
 
@@ -109,7 +117,7 @@ docker compose logs -f sync
 - `401 {"detail": "Invalid or missing API token"}`: wrong/revoked token or
   missing `Authorization: Bearer` header. Tokens are `sha256`-hashed at rest;
   revocation takes effect immediately.
-- Sessions lost on restart: you didn't set `SECRET_KEY` (a random one is
-  generated per boot with a warning).
+- Sessions lost on restart: `$DATA_DIR/.secret_key` was deleted. A new key is
+  created on the next boot and existing admin cookies no longer verify.
 - `curl` of `/` returns 303: expected — unauthenticated browsers
   redirect to `/login`.

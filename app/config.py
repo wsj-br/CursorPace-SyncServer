@@ -7,32 +7,45 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
+SECRET_KEY_FILENAME = ".secret_key"
+
 
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
     port: int
-    secret_key: str
-    secret_key_was_generated: bool
+    secret_key: str = ""
 
 
 def get_settings() -> Settings:
     data_dir = Path(os.environ.get("DATA_DIR", "/data"))
-    port = int(os.environ.get("PORT", "8080"))
-
-    secret_key = os.environ.get("SECRET_KEY")
-    was_generated = False
-    if not secret_key:
-        secret_key = secrets.token_urlsafe(32)
-        was_generated = True
-    return Settings(
-        data_dir=data_dir,
-        port=port,
-        secret_key=secret_key,
-        secret_key_was_generated=was_generated,
-    )
+    port = int(os.environ.get("PORT", "7050"))
+    return Settings(data_dir=data_dir, port=port)
 
 
 def ensure_data_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def secret_key_path(data_dir: Path) -> Path:
+    return data_dir / SECRET_KEY_FILENAME
+
+
+def load_or_create_secret_key(data_dir: Path) -> str:
+    ensure_data_dir(data_dir)
+    path = secret_key_path(data_dir)
+    if path.is_file():
+        existing = path.read_text(encoding="utf-8").strip()
+        if existing:
+            os.chmod(path, 0o600)
+            return existing
+    value = secrets.token_urlsafe(32)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    fd = os.open(path, flags, 0o600)
+    try:
+        os.write(fd, (value + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
+    os.chmod(path, 0o600)
+    return value

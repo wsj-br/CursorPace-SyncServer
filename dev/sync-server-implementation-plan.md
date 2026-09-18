@@ -34,7 +34,7 @@ Non-goals: user accounts beyond one admin password, live presence sockets, TLS t
 ├── app/
 │   ├── __init__.py
 │   ├── main.py               # FastAPI app, route wiring, startup (migrate + seed admin)
-│   ├── config.py             # env parsing: DATA_DIR, PORT, SECRET_KEY
+│   ├── config.py             # env parsing: DATA_DIR, PORT; session secret in $DATA_DIR/.secret_key
 │   ├── db.py                 # sqlite connect, migrate/DDL, query helpers
 │   ├── merge.py              # pure merge functions (samples union, cycle winner, history union)
 │   ├── backup.py             # export/import of the app backup zip format (section 7)
@@ -51,11 +51,10 @@ Non-goals: user accounts beyond one admin password, live presence sockets, TLS t
 
 | Env var | Required | Default | Meaning |
 |---|---|---|---|
-| `SECRET_KEY` | no | random per boot (warn) | Signs admin session cookies; set explicitly for stable logins across restarts. |
-| `DATA_DIR` | no | `/data` | SQLite file `sync.db` lives here; must be a Docker volume. |
-| `PORT` | no | `8080` | Listen port. |
+| `DATA_DIR` | no | `/data` | SQLite file `sync.db` and session secret `.secret_key` live here; must be a Docker volume. |
+| `PORT` | no | `7050` | Listen port. |
 
-Startup behavior: run DDL migrations, seed the default admin password `cursorpace01` if the `meta` key `admin_hash` is absent, then serve. First admin login with that default must choose a new password before the rest of the UI is available.
+Startup behavior: run DDL migrations, create `$DATA_DIR/.secret_key` (mode `0600`) if missing, seed the default admin password `cursorpace01` if the `meta` key `admin_hash` is absent, then serve. First admin login with that default must choose a new password before the rest of the UI is available.
 
 ## 5. Database schema (SQLite, file `sync.db`)
 
@@ -227,9 +226,9 @@ Request:
 
 Dockerfile (single stage is fine):
 
-- Base `python:3.12-slim`, `WORKDIR /app`, copy requirements then source, `EXPOSE 8080`.
-- Run `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}`.
-- `HEALTHCHECK` against `http://127.0.0.1:${PORT:-8080}/healthz`.
+- Base `python:3.12-slim`, `WORKDIR /app`, copy requirements then source, `EXPOSE 7050`.
+- Run `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-7050}`.
+- `HEALTHCHECK` against `http://127.0.0.1:${PORT:-7050}/healthz`.
 - Declare `VOLUME /data`.
 
 `docker-compose.yml` example:
@@ -238,16 +237,14 @@ Dockerfile (single stage is fine):
 services:
   sync:
     build: .
-    ports: ["8080:8080"]
-    environment:
-      SECRET_KEY: "long-random-string"
+    ports: ["7050:7050"]
     volumes:
       - sync-data:/data
 volumes:
   sync-data:
 ```
 
-README must document: first-run steps, env vars, LAN URL for app Settings (e.g. `http://server:8080`), token creation flow, and backup/restore.
+README must document: first-run steps, env vars, LAN URL for app Settings (e.g. `http://server:7050`), token creation flow, and backup/restore.
 
 ## 11. Implementation order
 

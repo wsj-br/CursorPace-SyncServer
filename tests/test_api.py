@@ -19,9 +19,8 @@ from app.merge import utc_now_canonical
 def make_app(tmp_path: Path) -> tuple[FastAPI, str]:
     settings = Settings(
         data_dir=tmp_path,
-        port=8080,
+        port=7050,
         secret_key="test-secret",
-        secret_key_was_generated=False,
     )
     app = create_app(settings)
     db_path = db_mod.db_path_for(tmp_path)

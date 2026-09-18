@@ -11,14 +11,14 @@ from fastapi.testclient import TestClient
 from app.auth import DEFAULT_ADMIN_PASSWORD
 from app.config import Settings
 from app.main import create_app, enable_console_timestamps
+from app.version import COPYRIGHT, GITHUB_URL, LICENSE_URL, load_release_info
 
 
 def make_app(tmp_path: Path):
     settings = Settings(
         data_dir=tmp_path,
-        port=8080,
+        port=7050,
         secret_key="test-secret",
-        secret_key_was_generated=False,
     )
     return create_app(settings)
 
@@ -73,12 +73,29 @@ def test_theme_assets_follow_color_scheme(tmp_path):
         assert "/static/cursor_pace.png" in login_html
         assert 'rel="icon"' in login_html
         assert "cursorpace01" in login_html
+        release = load_release_info()
+        assert f'href="{GITHUB_URL}"' in login_html
+        assert "Github" in login_html
+        assert 'class="site-footer-octocat"' in login_html
+        assert COPYRIGHT in login_html
+        assert f'href="{LICENSE_URL}"' in login_html
+        assert f"Version {release.version}" in login_html
+        assert f"Built {release.build_timestamp}" in login_html
+        assert 'class="site-footer"' in login_html
         login(client)
         dash = client.get("/").text
         assert 'class="brand-mark"' in dash
         assert "/static/cursor_pace.png" in dash
         assert "Refresh" in dash
         assert 'class="btn-icon"' in dash
+        assert f'href="{GITHUB_URL}"' in dash
+        assert "Github" in dash
+        assert 'class="site-footer-octocat"' in dash
+        assert COPYRIGHT in dash
+        assert f'href="{LICENSE_URL}"' in dash
+        assert f"Version {release.version}" in dash
+        assert f"Built {release.build_timestamp}" in dash
+        assert 'class="site-footer"' in dash
 
 
 def test_dashboard_and_data_render_friendly_timestamps(tmp_path):

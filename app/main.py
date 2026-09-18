@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -41,7 +42,7 @@ from .auth import (
     validate_new_admin_password,
     verify_admin_password,
 )
-from .config import Settings, ensure_data_dir, get_settings
+from .config import Settings, ensure_data_dir, get_settings, load_or_create_secret_key
 from .merge import (
     normalize_decimal,
     normalize_timestamp,
@@ -50,8 +51,7 @@ from .merge import (
     union_cycle_history,
     utc_now_canonical,
 )
-
-logger = logging.getLogger(__name__)
+from .version import load_release_info
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(HERE / "templates"))
@@ -213,21 +213,34 @@ def _html(
 # ---------------------------------------------------------------------------
 
 
+def _apply_release_globals() -> None:
+    info = load_release_info()
+    TEMPLATES.env.globals["app_version"] = info.version
+    TEMPLATES.env.globals["build_timestamp"] = info.build_timestamp
+    TEMPLATES.env.globals["github_url"] = info.github_url
+    TEMPLATES.env.globals["license_url"] = info.license_url
+    TEMPLATES.env.globals["copyright"] = info.copyright
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     enable_console_timestamps()
+    _apply_release_globals()
     resolved = settings or get_settings()
+    release = load_release_info()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         ensure_data_dir(resolved.data_dir)
-        if resolved.secret_key_was_generated:
-            logger.warning(
-                "SECRET_KEY not set; using random per-boot key, "
-                "admin sessions will not survive restarts."
+        settings = resolved
+        if not settings.secret_key:
+            settings = replace(
+                settings,
+                secret_key=load_or_create_secret_key(settings.data_dir),
             )
-        await db_mod.init_db(db_mod.db_path_for(resolved.data_dir))
+        app.state.settings = settings
+        await db_mod.init_db(db_mod.db_path_for(settings.data_dir))
         # Seed the default admin hash if none is stored yet.
-        async with _open_db(resolved) as conn:
+        async with _open_db(settings) as conn:
             existing = await db_mod.get_meta(conn, "admin_hash")
             if not existing:
                 await db_mod.set_meta(
@@ -236,7 +249,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await conn.commit()
         yield
 
-    app = FastAPI(title="CursorPace Sync Server", lifespan=lifespan)
+    app = FastAPI(
+        title="CursorPace Sync Server",
+        version=release.version,
+        lifespan=lifespan,
+    )
     app.state.settings = resolved
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
 
@@ -443,8 +460,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         must_change = is_default_admin_password(password)
         target = "/change-password" if must_change else "/"
+        settings: Settings = request.app.state.settings
         return _signed_redirect(
-            target, resolved.secret_key, must_change=must_change
+            target, settings.secret_key, must_change=must_change
         )
 
     @app.get("/change-password", response_class=HTMLResponse)
@@ -484,7 +502,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 conn, "admin_hash", hash_admin_password(password)
             )
             await conn.commit()
-        return _signed_redirect("/", resolved.secret_key, must_change=False)
+        settings: Settings = request.app.state.settings
+        return _signed_redirect("/", settings.secret_key, must_change=False)
 
     @app.post("/logout")
     async def logout():
