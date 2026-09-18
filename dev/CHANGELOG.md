@@ -8,6 +8,8 @@ Add new entries in the `## [Unreleased]` section. When releasing, move those ent
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-19
+
 - **Added**: docker - `production.yml` runs the published GHCR image with a persistent production volume and restart policy.
 - **Changed**: deps - `fastapi` 0.116.1 to 0.141.1.
 - **Changed**: deps - `uvicorn` 0.35.0 to 0.53.0.
