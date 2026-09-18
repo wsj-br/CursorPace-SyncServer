@@ -2,17 +2,31 @@
 
 Lightweight server letting multiple CursorPace desktop instances share usage data.
 
+Published image: `ghcr.io/wsj-br/cursorpace-syncserver` (version tags plus `latest`).
+
 ## First run
 
 1. Start the server:
    ```bash
    docker compose up --build -d
    ```
+   After a release, `docker compose up -d` (no `--build`) pulls
+   `ghcr.io/wsj-br/cursorpace-syncserver:latest`. If that package is still
+   private, `docker login ghcr.io` first, or set the package visibility to
+   public in GitHub Packages.
 2. Open `http://server:7050/login` and sign in with the default password
    `cursorpace01`. You'll be asked to choose a new admin password immediately.
 3. Go to **Tokens** → create a token per machine (raw token is shown once).
 4. In each CursorPace app Settings, set the sync URL to `http://server:7050`
    and paste that machine's token.
+
+Or run a tagged image (`:latest`, `:x.y.z`, or `:x.y`):
+
+```bash
+docker run --name cp-sync -d -p 7050:7050 \
+  -v cp-sync-data:/data \
+  ghcr.io/wsj-br/cursorpace-syncserver:latest
+```
 
 Or run locally:
 

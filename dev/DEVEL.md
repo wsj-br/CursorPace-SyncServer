@@ -69,6 +69,15 @@ A fast syntax-only check without dependencies:
 python3 -m py_compile app/*.py tests/*.py
 ```
 
+```bash
+./scripts/clean.sh
+./scripts/clean.sh --purge-data    # also wipe ./data (sync.db and .secret_key)
+./scripts/clean.sh --purge-venv
+```
+
+`.env` / `.env.local` are never removed. `--purge-data` only deletes a
+`DATA_DIR` that resolves inside the repository.
+
 ## 4. Manual web-UI checklist
 
 Automated tests don't cover the UI; verify by hand:
@@ -83,7 +92,49 @@ Automated tests don't cover the UI; verify by hand:
    `settings.json`, `usage-samples.json`), then re-import and confirm the
    summary counts.
 
-## 5. Build and run the Docker container
+## 5. Publish a release
+
+Before tagging, refresh `requirements.txt` pins:
+
+```bash
+./scripts/upgrade-deps --dry-run          # every pin to current PyPI
+./scripts/upgrade-deps --alerts --dry-run # only open Dependabot alerts
+./scripts/upgrade-deps --alerts           # apply alert upgrades, then pytest
+./scripts/upgrade-deps                    # apply every pin upgrade, then pytest
+./scripts/upgrade-deps anyio --set anyio==4.14.2
+```
+
+`--alerts` queries GitHub via `gh`. `--set name==version` skips PyPI for that
+package. The script writes Unreleased changelog bullets and reverts the pin
+files if pytest fails.
+
+1. Set `VERSION` in `app/version.py` with `./scripts/set-version x.y.z` and commit it.
+2. Follow `dev/release-new-version-prompt.md` to write
+   `release-notes/RELEASE_NOTES_<version>.md` and move changelog bullets.
+3. Commit those files on a clean tree.
+4. Run `./scripts/release.sh` (or `--dry-run` first). It tags `v<version>` at HEAD
+   and pushes the tag; `.github/workflows/release.yml` then runs tests, publishes
+   `ghcr.io/<owner>/<repo>:<version>` (and `latest`) to GHCR, and creates the
+   GitHub Release from the notes file.
+
+The first GHCR package is private. After the first successful publish, set the
+package visibility to public in GitHub Packages if anonymous pulls should work.
+
+Re-running `./scripts/release.sh` for the same version deletes the existing
+GitHub release and tag, then retags HEAD.
+
+## 6. Build and run the Docker container
+
+Published image (after a release):
+
+```bash
+docker pull ghcr.io/wsj-br/cursorpace-syncserver:latest
+docker run --rm -p 7050:7050 \
+  -v sync-data:/data \
+  ghcr.io/wsj-br/cursorpace-syncserver:latest
+```
+
+Build locally:
 
 ```bash
 docker build -t cursorpace-sync .
@@ -102,7 +153,8 @@ docker inspect --format='{{json .State.Health.Status}}' <container>
 Persistence check: push data, `docker stop` + `docker start` (same volume),
 pull again — samples, cycles, and tokens must survive.
 
-Or use Compose (see `docker-compose.yml`):
+Or use Compose (see `docker-compose.yml`). `docker compose up -d` pulls the
+GHCR image; add `--build` to build from the local Dockerfile:
 
 ```bash
 docker compose up --build -d
@@ -121,3 +173,6 @@ docker compose logs -f sync
   created on the next boot and existing admin cookies no longer verify.
 - `curl` of `/` returns 303: expected — unauthenticated browsers
   redirect to `/login`.
+- GHCR pull denied: the first published package is private. Run
+  `docker login ghcr.io`, or set the package visibility to public in
+  GitHub Packages.

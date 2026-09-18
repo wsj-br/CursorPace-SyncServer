@@ -30,7 +30,11 @@ Treat `app/` and the tests as truth. Spec details live in `dev/sync-server-imple
 | `tests/` | pytest. |
 | `dev/` | `CHANGELOG.md`, `DEVEL.md`, implementation plan, release-notes prompt. |
 | `scripts/dev.sh` | Local uvicorn `--reload` using `DATA_DIR` / `PORT` (or `.env` / `.env.local`). |
+| `scripts/clean.sh` | Remove bytecode, pytest leftovers, and optional local `data/` / `.venv`. |
 | `scripts/set-version` | Print or set `VERSION` and refresh `BUILD_TIMESTAMP` in `app/version.py`. |
+| `scripts/upgrade-deps` | CLI for `scripts/upgrade_deps.py`: bump pins from PyPI, `--alerts`, or `--set`. |
+| `scripts/release.sh` | Tag `v<VERSION>` at HEAD and trigger `.github/workflows/release.yml`. |
+| `.github/workflows/release.yml` | Tests, multi-arch image to GHCR, GitHub Release from notes. |
 | `Dockerfile` | `python:3.12-slim`, volume `/data`, healthcheck `/healthz`. |
 | `docker-compose.yml` | Example service on port 7050 with a named volume. |
 
@@ -61,17 +65,23 @@ Base path `/api/v1`. Max 50,000 samples per push (else 413). Unparseable timesta
 
 This server never talks to Cursor. Desktop clients fetch usage themselves and replicate samples plus cycle bounds/history only.
 
-If you change timestamp/decimal rules or cycle-winner / history-union, update and run `tests/test_merge.py`. If you change push/pull/auth HTTP behavior, update `tests/test_api.py`. If you change the zip format or import transaction, update `tests/test_backup.py`. If you change admin login, password gate, pages, or footer metadata, update `tests/test_web.py`. If you change display formatting or presence chips, update `tests/test_ui.py`. If you change `.secret_key` path or mode, update `tests/test_config.py`. If you change `VERSION` assignment shape or `scripts/set-version`, update `tests/test_version.py`.
+If you change timestamp/decimal rules or cycle-winner / history-union, update and run `tests/test_merge.py`. If you change push/pull/auth HTTP behavior, update `tests/test_api.py`. If you change the zip format or import transaction, update `tests/test_backup.py`. If you change admin login, password gate, pages, or footer metadata, update `tests/test_web.py`. If you change display formatting or presence chips, update `tests/test_ui.py`. If you change `.secret_key` path or mode, update `tests/test_config.py`. If you change `VERSION` assignment shape or `scripts/set-version`, update `tests/test_version.py`. If you change pin-upgrade selection or `scripts/upgrade-deps`, update `tests/test_upgrade_deps.py`.
 
 ## Commands
 ```
 source .venv/bin/activate
 pip install -r requirements.txt
 ./scripts/dev.sh
+./scripts/clean.sh
 pytest -q
 python3 -m py_compile app/*.py tests/*.py
 ./scripts/set-version
 ./scripts/set-version 1.2.3
+./scripts/upgrade-deps --dry-run
+./scripts/upgrade-deps --alerts
+./scripts/upgrade-deps
+./scripts/release.sh
+./scripts/release.sh --dry-run
 docker compose up --build -d
 docker build -t cursorpace-sync .
 ```
