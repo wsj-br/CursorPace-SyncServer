@@ -8,8 +8,10 @@ Add new entries in the `## [Unreleased]` section. When releasing, move those ent
 
 ## [Unreleased]
 
+- **Security**: deps - `anyio` 4.9.0 to 4.15.1.
 - **Added**: docker - Release workflow publishes `ghcr.io/wsj-br/cursorpace-syncserver` and creates the GitHub Release from `./scripts/release.sh`.
 - **Added**: scripts - `scripts/clean.sh` removes Python caches, pytest leftovers, and optional local `data/` / `.venv`.
+- **Added**: scripts - `scripts/upgrade-deps` bumps pinned `requirements.txt` versions from PyPI or open Dependabot alerts.
 - **Changed**: deps - `pytest` 8.4.1 to 9.0.3.
 - **Security**: deps - `python-multipart` 0.0.20 to 0.0.31.
 - **Added**: api - `POST /api/v1/push` and `GET /api/v1/pull` merge samples and cycle bounds; `GET /healthz` is unauthenticated.

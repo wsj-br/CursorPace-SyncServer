@@ -94,6 +94,20 @@ Automated tests don't cover the UI; verify by hand:
 
 ## 5. Publish a release
 
+Before tagging, refresh `requirements.txt` pins:
+
+```bash
+./scripts/upgrade-deps --dry-run          # every pin to current PyPI
+./scripts/upgrade-deps --alerts --dry-run # only open Dependabot alerts
+./scripts/upgrade-deps --alerts           # apply alert upgrades, then pytest
+./scripts/upgrade-deps                    # apply every pin upgrade, then pytest
+./scripts/upgrade-deps anyio --set anyio==4.14.2
+```
+
+`--alerts` queries GitHub via `gh`. `--set name==version` skips PyPI for that
+package. The script writes Unreleased changelog bullets and reverts the pin
+files if pytest fails.
+
 1. Set `VERSION` in `app/version.py` with `./scripts/set-version x.y.z` and commit it.
 2. Follow `dev/release-new-version-prompt.md` to write
    `release-notes/RELEASE_NOTES_<version>.md` and move changelog bullets.
