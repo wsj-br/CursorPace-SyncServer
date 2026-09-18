@@ -12,7 +12,6 @@ from pathlib import Path
 class Settings:
     data_dir: Path
     port: int
-    admin_password: str | None
     secret_key: str
     secret_key_was_generated: bool
 
@@ -20,7 +19,6 @@ class Settings:
 def get_settings() -> Settings:
     data_dir = Path(os.environ.get("DATA_DIR", "/data"))
     port = int(os.environ.get("PORT", "8080"))
-    admin_password = os.environ.get("ADMIN_PASSWORD")
 
     secret_key = os.environ.get("SECRET_KEY")
     was_generated = False
@@ -30,7 +28,6 @@ def get_settings() -> Settings:
     return Settings(
         data_dir=data_dir,
         port=port,
-        admin_password=admin_password,
         secret_key=secret_key,
         secret_key_was_generated=was_generated,
     )

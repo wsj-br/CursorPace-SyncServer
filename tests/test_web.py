@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from app.auth import DEFAULT_ADMIN_PASSWORD
 from app.config import Settings
 from app.main import create_app, enable_console_timestamps
 
@@ -16,7 +17,6 @@ def make_app(tmp_path: Path):
     settings = Settings(
         data_dir=tmp_path,
         port=8080,
-        admin_password="test-admin",
         secret_key="test-secret",
         secret_key_was_generated=False,
     )
@@ -25,9 +25,19 @@ def make_app(tmp_path: Path):
 
 def login(client: TestClient) -> None:
     response = client.post(
-        "/login", data={"password": "test-admin"}, follow_redirects=False
+        "/login",
+        data={"password": DEFAULT_ADMIN_PASSWORD},
+        follow_redirects=False,
     )
     assert response.status_code == 303
+    assert response.headers["location"] == "/change-password"
+    changed = client.post(
+        "/change-password",
+        data={"password": "chosen-admin-pass", "confirm": "chosen-admin-pass"},
+        follow_redirects=False,
+    )
+    assert changed.status_code == 303
+    assert changed.headers["location"] == "/"
 
 
 def test_dashboard_empty_states_and_last_activity_label(tmp_path):
@@ -62,6 +72,7 @@ def test_theme_assets_follow_color_scheme(tmp_path):
         login_html = client.get("/login").text
         assert "/static/cursor_pace.png" in login_html
         assert 'rel="icon"' in login_html
+        assert "cursorpace01" in login_html
         login(client)
         dash = client.get("/").text
         assert 'class="brand-mark"' in dash
@@ -150,3 +161,85 @@ def test_console_logs_include_clock_time():
     finally:
         access.removeHandler(access_handler)
         error.removeHandler(error_handler)
+
+
+def test_first_login_forces_password_change(tmp_path):
+    app = make_app(tmp_path)
+    with TestClient(app) as client:
+        login_page = client.get("/login")
+        assert login_page.status_code == 200
+        assert "cursorpace01" in login_page.text
+
+        wrong = client.post("/login", data={"password": "nope"})
+        assert wrong.status_code == 200
+        assert "Wrong password" in wrong.text
+
+        signed_in = client.post(
+            "/login",
+            data={"password": DEFAULT_ADMIN_PASSWORD},
+            follow_redirects=False,
+        )
+        assert signed_in.status_code == 303
+        assert signed_in.headers["location"] == "/change-password"
+
+        blocked = client.get("/", follow_redirects=False)
+        assert blocked.status_code == 303
+        assert blocked.headers["location"] == "/change-password"
+        assert client.get("/tokens", follow_redirects=False).headers["location"] == (
+            "/change-password"
+        )
+
+        form = client.get("/change-password")
+        assert form.status_code == 200
+        assert "Choose a new password" in form.text
+
+        keep_default = client.post(
+            "/change-password",
+            data={
+                "password": DEFAULT_ADMIN_PASSWORD,
+                "confirm": DEFAULT_ADMIN_PASSWORD,
+            },
+        )
+        assert keep_default.status_code == 200
+        assert "default password" in keep_default.text
+
+        mismatch = client.post(
+            "/change-password",
+            data={"password": "new-secret-1", "confirm": "new-secret-2"},
+        )
+        assert mismatch.status_code == 200
+        assert "do not match" in mismatch.text
+
+        too_short = client.post(
+            "/change-password",
+            data={"password": "short", "confirm": "short"},
+        )
+        assert too_short.status_code == 200
+        assert "at least" in too_short.text
+
+        saved = client.post(
+            "/change-password",
+            data={"password": "chosen-admin-pass", "confirm": "chosen-admin-pass"},
+            follow_redirects=False,
+        )
+        assert saved.status_code == 303
+        assert saved.headers["location"] == "/"
+        assert "Dashboard" in client.get("/").text
+        assert "cursorpace01" not in client.get("/login").text
+
+        client.post("/logout")
+        still_default = client.post(
+            "/login",
+            data={"password": DEFAULT_ADMIN_PASSWORD},
+            follow_redirects=False,
+        )
+        assert still_default.status_code == 200
+        assert "Wrong password" in still_default.text
+
+        with_new = client.post(
+            "/login",
+            data={"password": "chosen-admin-pass"},
+            follow_redirects=False,
+        )
+        assert with_new.status_code == 303
+        assert with_new.headers["location"] == "/"

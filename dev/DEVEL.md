@@ -21,15 +21,15 @@ pip install -r requirements.txt
 ## 2. Run the server locally
 
 ```bash
-ADMIN_PASSWORD=change-me SECRET_KEY=dev-secret DATA_DIR=./data PORT=8080 \
+SECRET_KEY=dev-secret DATA_DIR=./data PORT=8080 \
   uvicorn app.main:app --reload
 ```
 
-Then open `http://127.0.0.1:8080/login` and sign in with password `change-me`.
+Then open `http://127.0.0.1:8080/login` and sign in with `cursorpace01`.
+The first login asks you to choose a new admin password.
 
 | Env var | Meaning |
 |---|---|
-| `ADMIN_PASSWORD` | Seeds the admin password on first boot (required) |
 | `SECRET_KEY` | Signs admin session cookies; set it or logins reset on restart |
 | `DATA_DIR` | Directory holding `sync.db` (default `/data`) |
 | `PORT` | Listen port (default `8080`) |
@@ -65,10 +65,12 @@ python3 -m py_compile app/*.py tests/*.py
 Automated tests don't cover the UI; verify by hand:
 
 1. Wrong password on `/login` re-renders with an error.
-2. **Tokens** → generate → raw token shown once → paste into a push call.
-3. **Machines** shows the device as Active after a push/pull.
-4. **Data** shows bounds, counts, and the last-20 table.
-5. **Backup** → export, unzip (expect exactly `manifest.json`,
+2. First login with `cursorpace01` redirects to `/change-password`; the rest of
+   the UI stays blocked until a new password is saved.
+3. **Tokens** → generate → raw token shown once → paste into a push call.
+4. **Machines** shows the device as Active after a push/pull.
+5. **Data** shows bounds, counts, and the last-20 table.
+6. **Backup** → export, unzip (expect exactly `manifest.json`,
    `settings.json`, `usage-samples.json`), then re-import and confirm the
    summary counts.
 
@@ -77,7 +79,6 @@ Automated tests don't cover the UI; verify by hand:
 ```bash
 docker build -t cursorpace-sync .
 docker run --rm -p 8080:8080 \
-  -e ADMIN_PASSWORD=change-me \
   -e SECRET_KEY=long-random-string \
   -v sync-data:/data \
   cursorpace-sync

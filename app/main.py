@@ -30,13 +30,16 @@ from . import backup as backup_mod
 from . import db as db_mod
 from . import ui as ui_mod
 from .auth import (
+    DEFAULT_ADMIN_PASSWORD,
     SESSION_COOKIE,
     create_session_value,
     generate_token,
     hash_admin_password,
     hash_token,
+    is_default_admin_password,
+    load_session,
+    validate_new_admin_password,
     verify_admin_password,
-    verify_session_value,
 )
 from .config import Settings, ensure_data_dir, get_settings
 from .merge import (
@@ -161,15 +164,33 @@ async def _read_cycle_state(
     return raw_start, active, history if isinstance(history, list) else []
 
 
-def is_admin(request: Request) -> bool:
+def _session(request: Request) -> dict | None:
     settings: Settings = request.app.state.settings
-    return verify_session_value(
-        settings.secret_key, request.cookies.get(SESSION_COOKIE)
+    return load_session(settings.secret_key, request.cookies.get(SESSION_COOKIE))
+
+
+def _admin_gate(
+    request: Request, *, allow_setup: bool = False
+) -> RedirectResponse | None:
+    session = _session(request)
+    if session is None:
+        return RedirectResponse("/login", status_code=303)
+    if session.get("must_change") and not allow_setup:
+        return RedirectResponse("/change-password", status_code=303)
+    return None
+
+
+def _signed_redirect(
+    path: str, secret_key: str, *, must_change: bool = False
+) -> RedirectResponse:
+    resp = RedirectResponse(path, status_code=303)
+    resp.set_cookie(
+        SESSION_COOKIE,
+        create_session_value(secret_key, must_change=must_change),
+        httponly=True,
+        samesite="lax",
     )
-
-
-def require_admin_redirect(request: Request) -> bool:
-    return is_admin(request)
+    return resp
 
 
 def _html(
@@ -205,12 +226,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "admin sessions will not survive restarts."
             )
         await db_mod.init_db(db_mod.db_path_for(resolved.data_dir))
-        # Seed admin hash if absent.
+        # Seed the default admin hash if none is stored yet.
         async with _open_db(resolved) as conn:
             existing = await db_mod.get_meta(conn, "admin_hash")
-            if not existing and resolved.admin_password:
+            if not existing:
                 await db_mod.set_meta(
-                    conn, "admin_hash", hash_admin_password(resolved.admin_password)
+                    conn, "admin_hash", hash_admin_password(DEFAULT_ADMIN_PASSWORD)
                 )
                 await conn.commit()
         yield
@@ -381,30 +402,89 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         return rows
 
+    async def _using_default_password() -> bool:
+        async with _open_db(resolved) as conn:
+            stored = await db_mod.get_meta(conn, "admin_hash")
+        return stored is not None and verify_admin_password(
+            DEFAULT_ADMIN_PASSWORD, stored
+        )
+
+    def _login_page(
+        request: Request,
+        *,
+        error: str | None = None,
+        using_default: bool,
+        status_code: int = 200,
+    ) -> HTMLResponse:
+        return TEMPLATES.TemplateResponse(
+            request,
+            "login.html",
+            {"error": error, "using_default": using_default},
+            status_code=status_code,
+        )
+
     @app.get("/login", response_class=HTMLResponse)
     async def login_get(request: Request):
-        return TEMPLATES.TemplateResponse(request, "login.html", {"error": None})
+        return _login_page(
+            request, using_default=await _using_default_password()
+        )
 
     @app.post("/login", response_class=HTMLResponse)
     async def login_post(request: Request, password: str = Form(default="")):
         async with _open_db(resolved) as conn:
             stored = await db_mod.get_meta(conn, "admin_hash")
         ok = stored is not None and verify_admin_password(password, stored)
+        using_default = stored is not None and verify_admin_password(
+            DEFAULT_ADMIN_PASSWORD, stored
+        )
         if not ok:
+            return _login_page(
+                request, error="Wrong password", using_default=using_default
+            )
+        must_change = is_default_admin_password(password)
+        target = "/change-password" if must_change else "/"
+        return _signed_redirect(
+            target, resolved.secret_key, must_change=must_change
+        )
+
+    @app.get("/change-password", response_class=HTMLResponse)
+    async def change_password_get(request: Request):
+        gate = _admin_gate(request, allow_setup=True)
+        if gate:
+            return gate
+        session = _session(request)
+        if not session or not session.get("must_change"):
+            return RedirectResponse("/", status_code=303)
+        return TEMPLATES.TemplateResponse(
+            request, "change_password.html", {"error": None}
+        )
+
+    @app.post("/change-password", response_class=HTMLResponse)
+    async def change_password_post(
+        request: Request,
+        password: str = Form(default=""),
+        confirm: str = Form(default=""),
+    ):
+        gate = _admin_gate(request, allow_setup=True)
+        if gate:
+            return gate
+        session = _session(request)
+        if not session or not session.get("must_change"):
+            return RedirectResponse("/", status_code=303)
+        error = validate_new_admin_password(password, confirm)
+        if error:
             return TEMPLATES.TemplateResponse(
                 request,
-                "login.html",
-                {"error": "Wrong password"},
+                "change_password.html",
+                {"error": error},
                 status_code=200,
             )
-        resp = RedirectResponse("/", status_code=303)
-        resp.set_cookie(
-            SESSION_COOKIE,
-            create_session_value(resolved.secret_key),
-            httponly=True,
-            samesite="lax",
-        )
-        return resp
+        async with _open_db(resolved) as conn:
+            await db_mod.set_meta(
+                conn, "admin_hash", hash_admin_password(password)
+            )
+            await conn.commit()
+        return _signed_redirect("/", resolved.secret_key, must_change=False)
 
     @app.post("/logout")
     async def logout():
@@ -414,8 +494,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request):
-        if not require_admin_redirect(request):
-            return RedirectResponse("/login", status_code=303)
+        gate = _admin_gate(request)
+        if gate:
+            return gate
         async with _open_db(resolved) as conn:
             devices = await db_mod.list_devices(conn)
             stored_start, stored_active, stored_history = await _read_cycle_state(conn)
@@ -444,8 +525,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/tokens", response_class=HTMLResponse)
     async def tokens_get(request: Request):
-        if not require_admin_redirect(request):
-            return RedirectResponse("/login", status_code=303)
+        gate = _admin_gate(request)
+        if gate:
+            return gate
         async with _open_db(resolved) as conn:
             devices = await db_mod.list_devices(conn)
         return _html(
@@ -459,8 +541,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/tokens", response_class=HTMLResponse)
     async def tokens_post(request: Request, name: str = Form(default="")):
-        if not require_admin_redirect(request):
-            return RedirectResponse("/login", status_code=303)
+        gate = _admin_gate(request)
+        if gate:
+            return gate
         clean = name.strip()
         if not clean or len(clean) > 64:
             async with _open_db(resolved) as conn:
@@ -496,8 +579,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/tokens/{device_id}/delete")
     async def tokens_delete(request: Request, device_id: int):
-        if not require_admin_redirect(request):
-            return RedirectResponse("/login", status_code=303)
+        gate = _admin_gate(request)
+        if gate:
+            return gate
         async with _open_db(resolved) as conn:
             await db_mod.delete_device(conn, device_id)
             await conn.commit()
@@ -505,8 +589,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/machines", response_class=HTMLResponse)
     async def machines(request: Request):
-        if not require_admin_redirect(request):
-            return RedirectResponse("/login", status_code=303)
+        gate = _admin_gate(request)
+        if gate:
+            return gate
         async with _open_db(resolved) as conn:
             devices = await db_mod.list_devices(conn)
         return _html(
@@ -518,8 +603,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/data", response_class=HTMLResponse)
     async def data_page(request: Request):
-        if not require_admin_redirect(request):
-            return RedirectResponse("/login", status_code=303)
+        gate = _admin_gate(request)
+        if gate:
+            return gate
         async with _open_db(resolved) as conn:
             _, stored_active, stored_history = await _read_cycle_state(conn)
             sample_count = await db_mod.count_samples(conn)
@@ -540,16 +626,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/backup", response_class=HTMLResponse)
     async def backup_page(request: Request):
-        if not require_admin_redirect(request):
-            return RedirectResponse("/login", status_code=303)
+        gate = _admin_gate(request)
+        if gate:
+            return gate
         return _html(
             request, "backup.html", "backup", message=None, error=None
         )
 
     @app.get("/backup/export")
     async def backup_export(request: Request):
-        if not require_admin_redirect(request):
-            return RedirectResponse("/login", status_code=303)
+        gate = _admin_gate(request)
+        if gate:
+            return gate
         async with _open_db(resolved) as conn:
             stored_start, stored_active, stored_history = await _read_cycle_state(conn)
             samples = await db_mod.get_all_samples(conn)
@@ -572,8 +660,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.post("/backup/import", response_class=HTMLResponse)
     async def backup_import(request: Request, file: UploadFile = File(...)):
-        if not require_admin_redirect(request):
-            return RedirectResponse("/login", status_code=303)
+        gate = _admin_gate(request)
+        if gate:
+            return gate
         raw = await file.read()
         try:
             parsed = backup_mod.parse_import_zip(raw)

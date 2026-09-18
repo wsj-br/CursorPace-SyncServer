@@ -34,7 +34,7 @@ Non-goals: user accounts beyond one admin password, live presence sockets, TLS t
 ├── app/
 │   ├── __init__.py
 │   ├── main.py               # FastAPI app, route wiring, startup (migrate + seed admin)
-│   ├── config.py             # env parsing: DATA_DIR, PORT, ADMIN_PASSWORD, SECRET_KEY
+│   ├── config.py             # env parsing: DATA_DIR, PORT, SECRET_KEY
 │   ├── db.py                 # sqlite connect, migrate/DDL, query helpers
 │   ├── merge.py              # pure merge functions (samples union, cycle winner, history union)
 │   ├── backup.py             # export/import of the app backup zip format (section 7)
@@ -51,12 +51,11 @@ Non-goals: user accounts beyond one admin password, live presence sockets, TLS t
 
 | Env var | Required | Default | Meaning |
 |---|---|---|---|
-| `ADMIN_PASSWORD` | yes (first boot) | — | Seeds the admin password hash if none stored; changing it later does not reset the stored hash. |
 | `SECRET_KEY` | no | random per boot (warn) | Signs admin session cookies; set explicitly for stable logins across restarts. |
 | `DATA_DIR` | no | `/data` | SQLite file `sync.db` lives here; must be a Docker volume. |
 | `PORT` | no | `8080` | Listen port. |
 
-Startup behavior: run DDL migrations, seed admin hash from `ADMIN_PASSWORD` if the `meta` key `admin_hash` is absent, then serve.
+Startup behavior: run DDL migrations, seed the default admin password `cursorpace01` if the `meta` key `admin_hash` is absent, then serve. First admin login with that default must choose a new password before the rest of the UI is available.
 
 ## 5. Database schema (SQLite, file `sync.db`)
 
@@ -214,8 +213,9 @@ Request:
 
 ## 9. Web UI specification (admin password)
 
-- `GET /login`: password form. `POST /login`: verify scrypt hash, set signed session cookie, redirect `/`. Wrong password re-renders with an error (no account lockout in scope).
-- `POST /logout`: clear session. All routes below require a valid session, else redirect to `/login`.
+- `GET /login`: password form. First boot uses default password `cursorpace01` and shows that on the form. `POST /login`: verify scrypt hash, set signed session cookie. If the password is still the default, redirect to `/change-password`; otherwise redirect `/`. Wrong password re-renders with an error (no account lockout in scope).
+- `GET`/`POST /change-password`: required after first login with the default password. New password must differ from the default, be at least 8 characters, and match confirmation. Other admin routes redirect here until it succeeds.
+- `POST /logout`: clear session. All routes below require a valid session that has completed password setup, else redirect to `/login` or `/change-password`.
 - `GET /` dashboard: cards for device count, total samples, active cycle range, last push time; quick links.
 - `GET /tokens`: table of devices (name, prefix, created, last seen, status); `POST /tokens` with `name` generates a token, stores only its hash, and shows the raw token once on a confirmation page; `POST /tokens/{id}/delete` revokes (delete row; pushed samples stay).
 - `GET /machines`: same device data focused on sync status (last seen, status chip per 6.5, last sample count, last push size). May share the tokens table implementation with different columns.
@@ -240,7 +240,6 @@ services:
     build: .
     ports: ["8080:8080"]
     environment:
-      ADMIN_PASSWORD: "change-me"
       SECRET_KEY: "long-random-string"
     volumes:
       - sync-data:/data

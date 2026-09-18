@@ -20,7 +20,6 @@ def make_app(tmp_path: Path) -> tuple[FastAPI, str]:
     settings = Settings(
         data_dir=tmp_path,
         port=8080,
-        admin_password="test-admin",
         secret_key="test-secret",
         secret_key_was_generated=False,
     )

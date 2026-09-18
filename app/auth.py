@@ -10,6 +10,8 @@ import secrets
 from itsdangerous import BadSignature, URLSafeSerializer
 
 SESSION_COOKIE = "cursorpace_session"
+DEFAULT_ADMIN_PASSWORD = "cursorpace01"
+MIN_ADMIN_PASSWORD_LENGTH = 8
 
 # scrypt params (stdlib hashlib.scrypt, no extra deps).
 _SCRYPT_N = 16384
@@ -45,6 +47,22 @@ def hash_admin_password(password: str) -> str:
     return f"scrypt${salt.hex()}${dk.hex()}"
 
 
+def is_default_admin_password(password: str) -> bool:
+    return hmac.compare_digest(password, DEFAULT_ADMIN_PASSWORD)
+
+
+def validate_new_admin_password(password: str, confirm: str) -> str | None:
+    if not password:
+        return "Enter a new password"
+    if len(password) < MIN_ADMIN_PASSWORD_LENGTH:
+        return f"Use at least {MIN_ADMIN_PASSWORD_LENGTH} characters"
+    if is_default_admin_password(password):
+        return "Choose something other than the default password"
+    if password != confirm:
+        return "Passwords do not match"
+    return None
+
+
 def verify_admin_password(password: str, stored: str) -> bool:
     try:
         algo, salt_hex, hash_hex = stored.split("$")
@@ -72,15 +90,24 @@ def _serializer(secret_key: str) -> URLSafeSerializer:
     return URLSafeSerializer(secret_key, salt="cursorpace-admin-session")
 
 
-def create_session_value(secret_key: str) -> str:
-    return _serializer(secret_key).dumps({"admin": True})
+def create_session_value(secret_key: str, *, must_change: bool = False) -> str:
+    payload: dict[str, bool] = {"admin": True}
+    if must_change:
+        payload["must_change"] = True
+    return _serializer(secret_key).dumps(payload)
 
 
-def verify_session_value(secret_key: str, value: str | None) -> bool:
+def load_session(secret_key: str, value: str | None) -> dict | None:
     if not value:
-        return False
+        return None
     try:
         data = _serializer(secret_key).loads(value)
     except BadSignature:
-        return False
-    return isinstance(data, dict) and data.get("admin") is True
+        return None
+    if not isinstance(data, dict) or data.get("admin") is not True:
+        return None
+    return data
+
+
+def verify_session_value(secret_key: str, value: str | None) -> bool:
+    return load_session(secret_key, value) is not None
