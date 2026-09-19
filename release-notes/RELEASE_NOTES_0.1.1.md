@@ -29,46 +29,39 @@ See [`dev/CHANGELOG.md`](https://github.com/wsj-br/CursorPace-SyncServer/blob/ma
 
 ## Install
 
-Pull the versioned image from GitHub Container Registry:
+Use the production Compose file to run the published image without building
+locally:
 
 ```bash
-docker pull ghcr.io/wsj-br/cursorpace-syncserver:0.1.1
-docker run --name cp-sync -d -p 7050:7050 \
-  -v cp-sync-data:/data \
-  ghcr.io/wsj-br/cursorpace-syncserver:0.1.1
+curl -fsSL https://raw.githubusercontent.com/wsj-br/CursorPace-SyncServer/main/production.yml \
+  -o cursorpace-syncserver.yml
 ```
 
-To follow the latest published release, use the `latest` tag:
+Create `.env` in the same directory to pin this release and optionally change
+the host port:
+
+```dotenv
+CURSORPACE_VERSION=0.1.1
+SYNC_PORT=7050
+```
+
+`CURSORPACE_VERSION` defaults to `latest` when omitted. Pull and start the
+server:
 
 ```bash
-docker pull ghcr.io/wsj-br/cursorpace-syncserver:latest
-docker run --name cp-sync -d -p 7050:7050 \
-  -v cp-sync-data:/data \
-  ghcr.io/wsj-br/cursorpace-syncserver:latest
+docker compose -f cursorpace-syncserver.yml pull
+docker compose -f cursorpace-syncserver.yml up -d
+docker compose -f cursorpace-syncserver.yml ps
 ```
 
-Or use Docker Compose:
+The named volume keeps `sync.db`, tokens, samples, cycle data, and the session
+secret across updates. The server exposes plain HTTP for a trusted LAN. The
+default host port is `7050`; use the configured `SYNC_PORT` in the URL when it
+is different.
 
-```bash
-docker compose up --build -d
-```
-
-Build and run locally:
-
-```bash
-docker build -t cursorpace-sync .
-docker run --name cp-sync -d -p 7050:7050 \
-  -v cp-sync-data:/data \
-  cursorpace-sync
-```
-
-Keep `/data` on a persistent volume so `sync.db`, tokens, samples, cycle
-metadata, and the session secret survive container replacement. The default
-listen port is `7050`.
-
-Open `http://server:7050/login`. The first boot uses the default admin
-password `cursorpace01`; you must set a new password before tokens or backup
-are available.
+Open `http://server:7050/login` (or the configured port) and sign in with the
+default password `cursorpace01`. You must choose a new admin password
+immediately.
 
 ---
 

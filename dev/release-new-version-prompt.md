@@ -12,7 +12,7 @@ Create a new release notes file `release-notes/RELEASE_NOTES_<version>.md` for C
      - `## Why this release matters` — One or two sentences on the main impact or reason for this release.
      - `## Detailed Changes` — Do not copy changelog bullets. Point to `dev/CHANGELOG.md` on `main` with a fragment for the version heading (for example `[0.1.1] - 2026-09-18` becomes `#011---2026-09-18`).
      - `---`
-     - `## Install` — How to run this version from `ghcr.io/wsj-br/cursorpace-syncserver:<version>` (and `latest`), or with Docker Compose / `docker build` / `docker run`, a persistent `/data` volume, and the listen port (default `7050`). Mention first-run login at `/login` with the default password `cursorpace01` and the required password change.
+     - `## Install` — Follow the production deployment documented in `README.md`: explain that `production.yml` runs the published GHCR image without building locally; show downloading it from the `main` branch; show an optional `.env` with `CURSORPACE_VERSION=<version>` and `SYNC_PORT=7050`; explain that omitting `CURSORPACE_VERSION` uses `latest`; show `docker compose -f cursorpace-syncserver.yml pull`, `up -d`, and `ps`; mention the persistent named `/data` volume, the configurable host port, and first-run login at `/login` with the default password `cursorpace01` and required password change. Do not substitute standalone `docker run`, local `docker build`, or the development `docker-compose.yml` workflow unless `README.md` has changed its production deployment instructions.
      - `---`
      - `## Documentation` — Link README and `dev/DEVEL.md` as in the example below. Use the `main` branch on `https://github.com/wsj-br/CursorPace-SyncServer`.
      - `---`
@@ -44,22 +44,35 @@ See [`dev/CHANGELOG.md`](https://github.com/wsj-br/CursorPace-SyncServer/blob/ma
 
 ## Install
 
-Pull this version from GitHub Container Registry:
+Use the production Compose file to run the published image without building
+locally:
 
 ```bash
-docker pull ghcr.io/wsj-br/cursorpace-syncserver:0.1.1
-docker run --name cp-sync -d -p 7050:7050 \
-  -v cp-sync-data:/data \
-  ghcr.io/wsj-br/cursorpace-syncserver:0.1.1
+curl -fsSL https://raw.githubusercontent.com/wsj-br/CursorPace-SyncServer/main/production.yml \
+  -o cursorpace-syncserver.yml
 ```
 
-Or build and run from this tree with a persistent `/data` volume:
+Create `.env` in the same directory to pin this release and optionally change
+the host port:
+
+```dotenv
+CURSORPACE_VERSION=0.1.1
+SYNC_PORT=7050
+```
+
+`CURSORPACE_VERSION` defaults to `latest` when omitted. Pull and start the
+server:
 
 ```bash
-docker compose up --build -d
+docker compose -f cursorpace-syncserver.yml pull
+docker compose -f cursorpace-syncserver.yml up -d
+docker compose -f cursorpace-syncserver.yml ps
 ```
 
-Open `http://server:7050/login`. The first boot uses the default admin password `cursorpace01`; you must set a new password before tokens or backup are available.
+The named volume keeps the database, tokens, samples, cycle data, and session
+secret across updates. Open `http://server:7050/login` (or the configured
+`SYNC_PORT`) and sign in with `cursorpace01`. The first boot requires choosing
+a new admin password.
 
 ---
 
