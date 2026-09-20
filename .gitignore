@@ -7,6 +7,7 @@ data/
 *.log
 *.tmp
 *.zip
+*.tar*
 *.db
 *.db-shm
 *.db-wal

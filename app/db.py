@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -53,6 +54,20 @@ async def init_db(db_path: Path) -> None:
     async with aiosqlite.connect(str(db_path)) as db:
         await db.executescript(DDL)
         await db.commit()
+
+
+async def snapshot_database(db_path: Path) -> bytes:
+    """Consistent SQLite snapshot bytes (no WAL/SHM sidecars)."""
+    dest = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+    dest.close()
+    dest_path = Path(dest.name)
+    try:
+        async with aiosqlite.connect(str(db_path)) as src:
+            async with aiosqlite.connect(str(dest_path)) as dst:
+                await src.backup(dst)
+        return dest_path.read_bytes()
+    finally:
+        dest_path.unlink(missing_ok=True)
 
 
 async def get_meta(db: aiosqlite.Connection, key: str) -> str | None:

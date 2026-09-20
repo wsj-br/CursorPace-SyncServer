@@ -12,8 +12,8 @@ VERSION_FILE = Path(__file__).resolve()
 BUILD_STAMP_FILE = VERSION_FILE.with_name("BUILD_TIMESTAMP")
 
 # set-version script updates these two assignments.
-VERSION = "0.1.1"
-BUILD_TIMESTAMP = "2026-09-18T22:44:47Z"
+VERSION = "0.2.0"
+BUILD_TIMESTAMP = "2026-09-20T10:13:14Z"
 GITHUB_URL = "https://github.com/wsj-br/CursorPace-SyncServer"
 LICENSE_URL = f"{GITHUB_URL}/blob/main/LICENSE"
 COPYRIGHT = "© 2026 Waldemar Scudeller Jr."

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -42,7 +44,13 @@ from .auth import (
     validate_new_admin_password,
     verify_admin_password,
 )
-from .config import Settings, ensure_data_dir, get_settings, load_or_create_secret_key
+from .config import (
+    Settings,
+    ensure_data_dir,
+    get_settings,
+    load_or_create_secret_key,
+    write_secret_key,
+)
 from .merge import (
     normalize_decimal,
     normalize_timestamp,
@@ -643,14 +651,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             recent=recent,
         )
 
+    def _backup_page(
+        request: Request,
+        *,
+        message: str | None = None,
+        error: str | None = None,
+    ) -> HTMLResponse:
+        return _html(
+            request, "backup.html", "backup", message=message, error=error
+        )
+
+    def _truthy_form(value: str | None) -> bool:
+        return value in ("1", "on", "true", "yes")
+
     @app.get("/backup", response_class=HTMLResponse)
     async def backup_page(request: Request):
         gate = _admin_gate(request)
         if gate:
             return gate
-        return _html(
-            request, "backup.html", "backup", message=None, error=None
-        )
+        return _backup_page(request)
 
     @app.get("/backup/export")
     async def backup_export(request: Request):
@@ -677,8 +696,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             },
         )
 
+    @app.get("/backup/export-server")
+    async def backup_export_server(request: Request):
+        gate = _admin_gate(request)
+        if gate:
+            return gate
+        settings: Settings = request.app.state.settings
+        db_bytes = await db_mod.snapshot_database(
+            db_mod.db_path_for(resolved.data_dir)
+        )
+        payload = backup_mod.build_server_export_zip(
+            db_bytes=db_bytes,
+            secret_key=settings.secret_key,
+        )
+        stamp = utc_now_canonical().replace(":", "").replace("-", "")
+        return Response(
+            content=payload,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename=cursorpace-sync-backup-{stamp}.zip"
+                )
+            },
+        )
+
     @app.post("/backup/import", response_class=HTMLResponse)
-    async def backup_import(request: Request, file: UploadFile = File(...)):
+    async def backup_import(
+        request: Request,
+        file: UploadFile = File(...),
+        merge: str | None = Form(default=None),
+    ):
         gate = _admin_gate(request)
         if gate:
             return gate
@@ -686,54 +733,148 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             parsed = backup_mod.parse_import_zip(raw)
         except ValueError as exc:
-            return _html(
-                request,
-                "backup.html",
-                "backup",
-                message=None,
-                error=str(exc),
-            )
+            return _backup_page(request, error=str(exc))
         samples = parsed["samples"]
         assert isinstance(samples, list)
+        history = parsed["cycle_history"]
+        if not isinstance(history, list):
+            history = []
+        do_merge = _truthy_form(merge)
         async with _open_db(resolved) as conn:
-            await db_mod.clear_samples(conn)
-            await db_mod.insert_samples_ignore(
-                conn,
-                [
-                    (s["ts"], s["cursor"], s["other"], "")
-                    for s in samples  # type: ignore[misc]
-                ],
-            )
-            cycle_start_utc = parsed["cycle_start_utc"]
-            if cycle_start_utc is not None:
+            if do_merge:
+                stored_start, stored_active, stored_history = (
+                    await _read_cycle_state(conn)
+                )
+                pushed_start = parsed["cycle_start_utc"]
+                pushed_active = parsed["active_cycle"]
+                merged_start = pick_cycle_start_utc(
+                    stored_start,
+                    str(pushed_start) if isinstance(pushed_start, str) else None,
+                )
+                merged_active = pick_active_cycle(
+                    stored_active,
+                    pushed_active if isinstance(pushed_active, dict) else None,
+                )
+                merged_history = union_cycle_history(stored_history, history)
+                accepted, duplicates = await db_mod.insert_samples_ignore(
+                    conn,
+                    [
+                        (s["ts"], s["cursor"], s["other"], "")
+                        for s in samples  # type: ignore[misc]
+                    ],
+                )
+                if merged_start is not None:
+                    await db_mod.set_meta(
+                        conn, "cycle_start_utc", merged_start
+                    )
+                if merged_active is not None:
+                    await db_mod.set_meta(
+                        conn, "active_cycle", json.dumps(merged_active)
+                    )
                 await db_mod.set_meta(
-                    conn, "cycle_start_utc", str(cycle_start_utc)
+                    conn, "cycle_history", json.dumps(merged_history)
+                )
+                await conn.commit()
+                message = (
+                    f"Merged {accepted} new samples "
+                    f"({duplicates} already present), "
+                    f"{len(merged_history)} history entries."
                 )
             else:
-                await conn.execute(
-                    "DELETE FROM meta WHERE key = 'cycle_start_utc'"
+                await db_mod.clear_samples(conn)
+                await db_mod.insert_samples_ignore(
+                    conn,
+                    [
+                        (s["ts"], s["cursor"], s["other"], "")
+                        for s in samples  # type: ignore[misc]
+                    ],
                 )
-            active_cycle = parsed["active_cycle"]
-            if active_cycle is not None:
+                cycle_start_utc = parsed["cycle_start_utc"]
+                if cycle_start_utc is not None:
+                    await db_mod.set_meta(
+                        conn, "cycle_start_utc", str(cycle_start_utc)
+                    )
+                else:
+                    await conn.execute(
+                        "DELETE FROM meta WHERE key = 'cycle_start_utc'"
+                    )
+                active_cycle = parsed["active_cycle"]
+                if active_cycle is not None:
+                    await db_mod.set_meta(
+                        conn, "active_cycle", json.dumps(active_cycle)
+                    )
+                else:
+                    await conn.execute(
+                        "DELETE FROM meta WHERE key = 'active_cycle'"
+                    )
                 await db_mod.set_meta(
-                    conn, "active_cycle", json.dumps(active_cycle)
+                    conn, "cycle_history", json.dumps(history)
                 )
-            else:
-                await conn.execute("DELETE FROM meta WHERE key = 'active_cycle'")
-            await db_mod.set_meta(
-                conn, "cycle_history", json.dumps(parsed["cycle_history"])
+                await conn.commit()
+                message = (
+                    f"Imported {len(samples)} samples, "
+                    f"{len(history)} history entries."
+                )
+        return _backup_page(request, message=message)
+
+    @app.post("/backup/import-server", response_class=HTMLResponse)
+    async def backup_import_server(
+        request: Request,
+        file: UploadFile = File(...),
+        confirm: str | None = Form(default=None),
+    ):
+        gate = _admin_gate(request)
+        if gate:
+            return gate
+        if not _truthy_form(confirm):
+            return _backup_page(
+                request,
+                error=(
+                    "Confirm that this will replace the database, tokens, "
+                    "admin password, and session secret."
+                ),
             )
-            await conn.commit()
-        return _html(
-            request,
-            "backup.html",
-            "backup",
-            message=(
-                f"Imported {len(samples)} samples, "
-                f"{len(parsed['cycle_history']) if isinstance(parsed['cycle_history'], list) else 0} history entries."
-            ),
-            error=None,
+        raw = await file.read()
+        try:
+            parsed = backup_mod.parse_server_import_zip(raw)
+        except ValueError as exc:
+            return _backup_page(request, error=str(exc))
+        db_bytes = parsed["db_bytes"]
+        secret = parsed["secret_key"]
+        assert isinstance(db_bytes, bytes)
+        assert isinstance(secret, str)
+        dest = db_mod.db_path_for(resolved.data_dir)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=".restore-", suffix=".db", dir=str(dest.parent)
         )
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        try:
+            tmp_path.write_bytes(db_bytes)
+            os.replace(tmp_path, dest)
+        except Exception:
+            tmp_path.unlink(missing_ok=True)
+            raise
+        write_secret_key(resolved.data_dir, secret)
+        request.app.state.settings = replace(
+            request.app.state.settings, secret_key=secret
+        )
+        await db_mod.init_db(dest)
+        resp = _backup_page(
+            request,
+            message=(
+                "Restored the sync server backup. Tokens, admin password, "
+                "and session secret now match the zip."
+            ),
+        )
+        resp.set_cookie(
+            SESSION_COOKIE,
+            create_session_value(secret, must_change=False),
+            httponly=True,
+            samesite="lax",
+        )
+        return resp
 
     # Store lifespan manually for older TestClient without lifespan support:
     # TestClient in recent httpx-based versions handles lifespan via `with`.

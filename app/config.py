@@ -32,6 +32,22 @@ def secret_key_path(data_dir: Path) -> Path:
     return data_dir / SECRET_KEY_FILENAME
 
 
+def write_secret_key(data_dir: Path, value: str) -> None:
+    """Write `$DATA_DIR/.secret_key` with mode 0600."""
+    text = value.strip()
+    if not text:
+        raise ValueError("secret key must not be empty")
+    ensure_data_dir(data_dir)
+    path = secret_key_path(data_dir)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    fd = os.open(path, flags, 0o600)
+    try:
+        os.write(fd, (text + "\n").encode("utf-8"))
+    finally:
+        os.close(fd)
+    os.chmod(path, 0o600)
+
+
 def load_or_create_secret_key(data_dir: Path) -> str:
     ensure_data_dir(data_dir)
     path = secret_key_path(data_dir)
@@ -41,11 +57,5 @@ def load_or_create_secret_key(data_dir: Path) -> str:
             os.chmod(path, 0o600)
             return existing
     value = secrets.token_urlsafe(32)
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    fd = os.open(path, flags, 0o600)
-    try:
-        os.write(fd, (value + "\n").encode("utf-8"))
-    finally:
-        os.close(fd)
-    os.chmod(path, 0o600)
+    write_secret_key(data_dir, value)
     return value

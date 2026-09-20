@@ -55,8 +55,12 @@ def test_dashboard_empty_states_and_last_activity_label(tmp_path):
         assert "No samples yet" in client.get("/data").text
         backup = client.get("/backup").text
         assert 'href="/backup/export"' in backup
+        assert 'href="/backup/export-server"' in backup
         assert "<a href=\"/backup/export\"><button>" not in backup
-        assert "Import replaces the current samples" in backup
+        assert 'name="merge"' in backup
+        assert 'action="/backup/import-server"' in backup
+        assert "Import replaces samples and cycle metadata" in backup
+        assert "input[type=\"checkbox\"]" in client.get("/static/styles.css").text
 
 
 def test_theme_assets_follow_color_scheme(tmp_path):

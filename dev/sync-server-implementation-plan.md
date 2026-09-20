@@ -37,7 +37,7 @@ Non-goals: user accounts beyond one admin password, live presence sockets, TLS t
 │   ├── config.py             # env parsing: DATA_DIR, PORT; session secret in $DATA_DIR/.secret_key
 │   ├── db.py                 # sqlite connect, migrate/DDL, query helpers
 │   ├── merge.py              # pure merge functions (samples union, cycle winner, history union)
-│   ├── backup.py             # export/import of the app backup zip format (section 7)
+│   ├── backup.py             # export/import of app and sync-server zip formats (section 7)
 │   ├── auth.py               # token hashing/verification, admin password check, session helpers
 │   └── templates/            # login.html, dashboard.html, tokens.html, machines.html, data.html, backup.html
 │   └── static/               # one small styles.css (no framework needed)
@@ -175,9 +175,25 @@ The server export MUST be restorable by the desktop app, and server import MUST 
 
 ### 7.4 Import behavior
 
-- Replaces the entire canonical dataset (samples + cycle meta) inside one SQLite transaction.
+- Default: replaces the entire canonical dataset (samples + cycle meta) inside one SQLite transaction. Missing cycle keys in the zip delete the corresponding stored meta rows.
+- Merge (checkbox on `POST /backup/import`): do not clear samples. Union by canonical `ts` with first writer wins (`INSERT OR IGNORE`); merge `cycle_start_utc`, `active_cycle`, and `cycle_history` per 6.3. Missing zip fields keep stored values. Tokens are not changed.
+- Zips containing `sync.db` are rejected here; use the sync-server import (7.5).
 - Missing `usage-samples.json` in the zip means empty samples (do not fail).
 - Missing `manifest.json` is allowed (old backups); when present, validate per 7.1.
+
+### 7.5 Sync server backup
+
+Full-server snapshot, not restorable by the desktop app. The zip contains:
+
+```json
+{"formatVersion": 1, "product": "CursorPaceSyncServer", "createdUtc": "2026-09-18T10:00:00.000000Z"}
+```
+
+plus binary `sync.db` (consistent SQLite snapshot of samples, meta, and devices) and `secret_key` (session signing secret as text; written on disk as `$DATA_DIR/.secret_key`).
+
+- Export filename: `cursorpace-sync-backup-<utc-stamp>.zip`.
+- On import: `product` must equal `CursorPaceSyncServer`; reject `formatVersion` greater than 1; require `sync.db` and `secret_key`; reject CursorPace app zips. The extracted database must be SQLite with tables `samples`, `meta`, and `devices`.
+- Import replaces `$DATA_DIR/sync.db` and `$DATA_DIR/.secret_key` (mode `0600`), reloads the in-memory session secret, and re-issues the admin session cookie. API tokens and the admin password come from the restored database. No merge path.
 
 ## 8. HTTP API specification
 
@@ -219,7 +235,7 @@ Request:
 - `GET /tokens`: table of devices (name, prefix, created, last seen, status); `POST /tokens` with `name` generates a token, stores only its hash, and shows the raw token once on a confirmation page; `POST /tokens/{id}/delete` revokes (delete row; pushed samples stay).
 - `GET /machines`: same device data focused on sync status (last seen, status chip per 6.5, last sample count, last push size). May share the tokens table implementation with different columns.
 - `GET /data`: active cycle bounds, history count, sample count, earliest/latest sample ts, last 20 samples table.
-- `GET /backup`: export button (`GET /backup/export` streams the zip download `cursorpace-backup-<utc-stamp>.zip`) and import form (`POST /backup/import` multipart file, validates per 7.4, shows summary or errors).
+- `GET /backup`: dataset export (`GET /backup/export` streams `cursorpace-backup-<utc-stamp>.zip`) and import form (`POST /backup/import` multipart file, optional `merge` checkbox, validates per 7.4). Sync-server export (`GET /backup/export-server` streams `cursorpace-sync-backup-<utc-stamp>.zip`) and import form (`POST /backup/import-server` multipart file plus confirmation checkbox, validates per 7.5). Shows summary or errors.
 - Token generation: `secrets.token_urlsafe(32)`; store `sha256` hex; display prefix is the first 8 raw chars.
 
 ## 10. Docker and deployment
@@ -254,7 +270,7 @@ README must document: first-run steps, the GHCR image, env vars, LAN URL for app
 1. Scaffold repo layout, requirements, config, DB module with DDL.
 2. `merge.py` pure functions plus `tests/test_merge.py`.
 3. API routes push/pull/healthz plus `tests/test_api.py` (auth failures, merge convergence, idempotent re-push).
-4. `backup.py` export/import plus `tests/test_backup.py` (round-trip; import of a hand-written app-style zip; rejection of bad manifest/product and newer formatVersion).
+4. `backup.py` export/import plus `tests/test_backup.py` (app zip round-trip; merge vs replace; sync-server zip; rejection of bad manifest/product and newer formatVersion).
 5. Web UI templates and session auth (manual check: login, create token, revoke, export, import).
 6. Dockerfile, compose file, README; verify container boots, persists across restart, healthcheck passes.
 
@@ -264,6 +280,6 @@ README must document: first-run steps, the GHCR image, env vars, LAN URL for app
 - Re-pushing identical data returns `accepted: 0` and is idempotent.
 - Newer `active_cycle` wins; history union keeps one entry per start date.
 - Invalid token yields 401; revoked token stops working immediately.
-- Exported zip unzips to the three entries in section 7 and imports back with zero diff.
+- Exported app zip unzips to the three entries in section 7 and imports back with zero diff. Sync-server zip restores `sync.db` and the session secret.
 - Container restart with the same `/data` volume preserves samples, cycles, and tokens.
 - `pytest` passes; `GET /healthz` returns ok.

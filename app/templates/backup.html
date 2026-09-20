@@ -5,7 +5,7 @@
 <header class="page-header">
   <div>
     <h1>Backup</h1>
-    <p class="lede">Export the canonical dataset, or replace it from a CursorPace backup zip.</p>
+    <p class="lede">Export or import a CursorPace dataset zip, or a full sync-server snapshot.</p>
   </div>
 </header>
 
@@ -14,18 +14,35 @@
 
 <div class="split">
   <section class="panel">
-    <h2>Export</h2>
+    <h2>Dataset (CursorPace app)</h2>
     <p class="muted">Downloads a zip with <code>manifest.json</code>, <code>settings.json</code>, and <code>usage-samples.json</code>.</p>
-    <p><a class="btn" href="/backup/export">Export backup (.zip)</a></p>
-  </section>
-  <section class="panel">
-    <h2>Import</h2>
-    <p class="alert alert-warn">Import replaces the current samples and cycle metadata in one transaction. Tokens are not changed.</p>
+    <p><a class="btn" href="/backup/export">Export dataset (.zip)</a></p>
+    <p class="alert alert-warn">Import replaces samples and cycle metadata unless you choose merge. Tokens are not changed.</p>
     <form class="stack" method="post" action="/backup/import" enctype="multipart/form-data">
       <label>Backup zip
         <input type="file" name="file" accept=".zip" required />
       </label>
-      <button class="btn btn-danger" type="submit">Import and replace</button>
+      <label class="check">
+        <input type="checkbox" name="merge" value="1" />
+        Merge with existing samples and cycle data instead of replacing
+      </label>
+      <button class="btn" type="submit">Import dataset</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Sync server</h2>
+    <p class="muted">Downloads a zip with the SQLite database and session secret.</p>
+    <p><a class="btn" href="/backup/export-server">Export server backup (.zip)</a></p>
+    <p class="alert alert-warn">Import replaces the database, API tokens, admin password, and session secret.</p>
+    <form class="stack" method="post" action="/backup/import-server" enctype="multipart/form-data">
+      <label>Server backup zip
+        <input type="file" name="file" accept=".zip" required />
+      </label>
+      <label class="check">
+        <input type="checkbox" name="confirm" value="1" required />
+        Replace this server's database, tokens, admin password, and session secret
+      </label>
+      <button class="btn btn-danger" type="submit">Import server backup</button>
     </form>
   </section>
 </div>

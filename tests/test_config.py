@@ -12,6 +12,7 @@ from app.config import (
     Settings,
     load_or_create_secret_key,
     secret_key_path,
+    write_secret_key,
 )
 from app.main import create_app
 
@@ -47,3 +48,11 @@ def test_app_startup_writes_secret_key_beside_database(tmp_path: Path):
         stored = path.read_text(encoding="utf-8").strip()
         assert stored == client.app.state.settings.secret_key
         assert client.get("/healthz").json() == {"status": "ok"}
+
+
+def test_write_secret_key_restricted_permissions(tmp_path: Path):
+    path = secret_key_path(tmp_path)
+    write_secret_key(tmp_path, " restored-key ")
+    assert path.is_file()
+    assert path.read_text(encoding="utf-8").strip() == "restored-key"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600

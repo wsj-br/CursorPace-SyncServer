@@ -8,6 +8,11 @@ Add new entries in the `## [Unreleased]` section. When releasing, move those ent
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-20
+
+- **Added**: backup - Sync server zip export/import (`sync.db` + session secret).
+- **Added**: backup - Optional merge when importing a CursorPace app zip.
+
 ## [0.1.1] - 2026-09-19
 
 - **Added**: docker - `production.yml` runs the published GHCR image with a persistent production volume and restart policy.

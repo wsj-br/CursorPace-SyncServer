@@ -77,10 +77,17 @@ if that file is missing.
 
 ## Backup / restore
 
-**Backup** page → **Export** downloads `cursorpace-backup-<stamp>.zip`
-(`manifest.json`, `settings.json`, `usage-samples.json`).
-**Import** accepts app- or server-produced zips and replaces the canonical
-dataset in one transaction.
+The **Backup** page has two zip kinds:
+
+- **Dataset (CursorPace app)** → **Export dataset** downloads `cursorpace-backup-<stamp>.zip`
+  (`manifest.json`, `settings.json`, `usage-samples.json`). **Import dataset**
+  accepts app-produced zips. By default it replaces samples and cycle metadata
+  in one transaction; check **Merge** to union samples (first writer wins) and
+  cycle bounds using the same rules as push. Tokens are not changed.
+- **Sync server** → **Export server backup** downloads
+  `cursorpace-sync-backup-<stamp>.zip` (`manifest.json`, `sync.db`,
+  `secret_key`). **Import server backup** replaces the database, API tokens,
+  admin password, and session secret. Confirm on the form before submitting.
 
 ## Development
 

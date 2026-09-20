@@ -60,8 +60,8 @@ What the suite covers:
   history-union rules (spec §6)
 - `tests/test_api.py` — 401s, two-machine convergence, idempotent re-push,
   newer-cycle-wins (spec §8, §12)
-- `tests/test_backup.py` — zip round-trip, app-style import, bad
-  manifest/product rejection (spec §7)
+- `tests/test_backup.py` — app and sync-server zip round-trip, merge vs
+  replace import, bad manifest/product rejection (spec §7)
 
 A fast syntax-only check without dependencies:
 
@@ -88,9 +88,10 @@ Automated tests don't cover the UI; verify by hand:
 3. **Tokens** → generate → raw token shown once → paste into a push call.
 4. **Machines** shows the device as Active after a push/pull.
 5. **Data** shows bounds, counts, and the last-20 table.
-6. **Backup** → export, unzip (expect exactly `manifest.json`,
-   `settings.json`, `usage-samples.json`), then re-import and confirm the
-   summary counts.
+6. **Backup** → export the dataset zip (expect `manifest.json`,
+   `settings.json`, `usage-samples.json`), re-import replace and merge, then
+   export/import a sync-server zip (`manifest.json`, `sync.db`, `secret_key`)
+   and confirm tokens and samples match the snapshot.
 
 ## 5. Publish a release
 

@@ -1,9 +1,10 @@
-"""Backup export/import of the app backup zip format (spec section 7)."""
+"""Backup export/import of the app and sync-server zip formats (spec section 7)."""
 
 from __future__ import annotations
 
 import io
 import json
+import sqlite3
 import zipfile
 from datetime import datetime
 
@@ -16,6 +17,11 @@ from .merge import (
 
 FORMAT_VERSION = 1
 PRODUCT = "CursorPace"
+SERVER_FORMAT_VERSION = 1
+SERVER_PRODUCT = "CursorPaceSyncServer"
+SERVER_DB_ENTRY = "sync.db"
+SERVER_SECRET_ENTRY = "secret_key"
+SERVER_REQUIRED_TABLES = frozenset({"samples", "meta", "devices"})
 
 
 def _renewal_day(cycle_start_local: str) -> int:
@@ -105,7 +111,7 @@ def _validate_local_bounds(start: object, end: object) -> bool:
 
 
 def parse_import_zip(data: bytes) -> dict[str, object]:
-    """Parse an app/server backup zip. Raises ValueError with a message."""
+    """Parse a CursorPace app backup zip. Raises ValueError with a message."""
     try:
         zf = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as exc:
@@ -113,6 +119,10 @@ def parse_import_zip(data: bytes) -> dict[str, object]:
 
     with zf:
         names = set(zf.namelist())
+        if SERVER_DB_ENTRY in names:
+            raise ValueError(
+                "this is a sync server backup; use the server import"
+            )
 
         # manifest.json: allowed to be missing (old backups).
         if "manifest.json" in names:
@@ -223,3 +233,92 @@ def parse_import_zip(data: bytes) -> dict[str, object]:
         "active_cycle": active_cycle,
         "cycle_history": cycle_history,
     }
+
+
+def build_server_export_zip(*, db_bytes: bytes, secret_key: str) -> bytes:
+    manifest = {
+        "formatVersion": SERVER_FORMAT_VERSION,
+        "product": SERVER_PRODUCT,
+        "createdUtc": utc_now_canonical(),
+    }
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+        zf.writestr(SERVER_DB_ENTRY, db_bytes)
+        zf.writestr(SERVER_SECRET_ENTRY, secret_key.strip() + "\n")
+    return buf.getvalue()
+
+
+def _require_server_tables(db_bytes: bytes) -> None:
+    conn = sqlite3.connect(":memory:")
+    try:
+        try:
+            conn.deserialize(db_bytes)
+            tables = {
+                row[0]
+                for row in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                )
+            }
+        except sqlite3.Error as exc:
+            raise ValueError("not a valid SQLite database") from exc
+    finally:
+        conn.close()
+    missing = sorted(SERVER_REQUIRED_TABLES - tables)
+    if missing:
+        raise ValueError("sync.db is missing tables: " + ", ".join(missing))
+
+
+def parse_server_import_zip(data: bytes) -> dict[str, object]:
+    """Parse a sync-server backup zip. Raises ValueError with a message."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile as exc:
+        raise ValueError("not a valid zip file") from exc
+
+    with zf:
+        names = set(zf.namelist())
+        if "manifest.json" not in names:
+            if SERVER_DB_ENTRY not in names and (
+                "usage-samples.json" in names or "settings.json" in names
+            ):
+                raise ValueError(
+                    "this is a CursorPace app backup; use the dataset import"
+                )
+            raise ValueError("missing manifest.json")
+        try:
+            manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as exc:
+            raise ValueError("invalid manifest.json") from exc
+        product = manifest.get("product")
+        if product == PRODUCT:
+            raise ValueError(
+                "this is a CursorPace app backup; use the dataset import"
+            )
+        if product != SERVER_PRODUCT:
+            raise ValueError(f"unsupported product: {product!r}")
+        version = manifest.get("formatVersion", 1)
+        if isinstance(version, bool) or not isinstance(version, int):
+            raise ValueError("invalid formatVersion")
+        if version > SERVER_FORMAT_VERSION:
+            raise ValueError(f"unsupported formatVersion: {version}")
+
+        if SERVER_DB_ENTRY not in names:
+            if "usage-samples.json" in names or "settings.json" in names:
+                raise ValueError(
+                    "this is a CursorPace app backup; use the dataset import"
+                )
+            raise ValueError("missing sync.db")
+        if SERVER_SECRET_ENTRY not in names:
+            raise ValueError("missing secret_key")
+
+        db_bytes = zf.read(SERVER_DB_ENTRY)
+        try:
+            secret_key = zf.read(SERVER_SECRET_ENTRY).decode("utf-8").strip()
+        except UnicodeDecodeError as exc:
+            raise ValueError("invalid secret_key") from exc
+        if not secret_key:
+            raise ValueError("empty secret_key")
+        _require_server_tables(db_bytes)
+
+    return {"db_bytes": db_bytes, "secret_key": secret_key}

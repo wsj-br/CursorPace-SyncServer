@@ -7,7 +7,7 @@
 - Do not guess APIs, versions, flags, commit SHAs, or package names. Verify by reading code or docs before asserting.
 
 ## Project
-Lightweight FastAPI server that lets multiple CursorPace desktop instances share one canonical usage dataset. Each machine pushes samples plus billing-cycle bounds and pulls the merged state. A signed-cookie admin UI issues per-machine Bearer tokens, shows devices and data, and exports or imports the desktop app backup zip.
+Lightweight FastAPI server that lets multiple CursorPace desktop instances share one canonical usage dataset. Each machine pushes samples plus billing-cycle bounds and pulls the merged state. A signed-cookie admin UI issues per-machine Bearer tokens, shows devices and data, and exports or imports the desktop app backup zip plus a full sync-server snapshot (`sync.db` and the session secret).
 
 Stack: Python 3.12+ / FastAPI / uvicorn / aiosqlite / Jinja2. One admin password, one shared dataset per process. Ships as a single Docker container for a trusted LAN (plain HTTP; TLS is out of scope). No extra user accounts, no live presence sockets, no multi-tenant datasets.
 
@@ -22,7 +22,7 @@ Treat `app/` and the tests as truth. Spec details live in `dev/sync-server-imple
 | `app/db.py` | SQLite connect, DDL, query helpers. No ORM. |
 | `app/merge.py` | Pure merge: timestamp/decimal normalize, cycle winner, history union. No I/O. |
 | `app/auth.py` | Token hash/verify, scrypt admin password, signed session cookie. |
-| `app/backup.py` | App-compatible zip export/import (`manifest.json`, `settings.json`, `usage-samples.json`). |
+| `app/backup.py` | App-compatible zip and sync-server zip export/import (`sync.db` + session secret). |
 | `app/ui.py` | View-only timestamp and number formatting. No I/O, no merge rules. |
 | `app/version.py` | `VERSION`, `BUILD_TIMESTAMP`, GitHub and license URLs shown in the footer. |
 | `app/templates/` | Server-rendered pages: login, change-password, dashboard, tokens, machines, data, backup. |
@@ -49,8 +49,8 @@ Construct the app with `create_app(settings)`. Tests pass a temp `Settings(data_
 - Merge: keep `merge.py` pure. Samples union by canonical `ts`; first writer wins (`INSERT OR IGNORE`). `cycle_start_utc` keeps the later instant. `active_cycle` newest-wins (later `cycle_start`, then later `next_renewal`, else keep stored). `cycle_history` unions by `cycle_start` date part; duplicate dates keep the later `next_renewal`. Never convert percentages through `float` in merge or storage; use `Decimal` and store plain strings (max 4 fractional digits, non-negative).
 - Auth (API): `Authorization: Bearer <raw-token>`; `sha256` hex compared to `devices.token_hash`. Missing or revoked token is `401` `{"detail": "Invalid or missing API token"}`. Tokens are `secrets.token_urlsafe(32)`; store only the hash and an 8-character display prefix. Revoke deletes the device row; samples stay.
 - Auth (admin): stdlib `hashlib.scrypt`. Session cookie `cursorpace_session` via `itsdangerous`. First login with the default password must complete `/change-password` (min 8 chars, not the default, confirm match) before any other admin page. No account lockout.
-- Backup: zip product `CursorPace`, `formatVersion` 1. Import replaces the canonical dataset (samples + cycle meta) in one transaction. Accept app-produced zips; reject `product` other than `CursorPace` and `formatVersion` greater than 1. Missing `manifest.json` is allowed (old backups). Missing `usage-samples.json` means empty samples.
-- Web UI: Jinja2 plus minimal vanilla JS. Routes: `/login`, `/change-password`, `/logout`, `/`, `/tokens`, `/machines`, `/data`, `/backup` (export/import). Footer shows version, UTC build stamp, copyright, and the GitHub link from `app/version.py`.
+- Backup: two zip products. App zip `CursorPace` `formatVersion` 1; import replaces samples + cycle meta unless merge is checked (then union per `merge.py` / push). Accept app-produced zips; reject `product` other than `CursorPace` and `formatVersion` greater than 1. Missing `manifest.json` is allowed (old backups). Missing `usage-samples.json` means empty samples. Sync-server zip `CursorPaceSyncServer` contains `sync.db` and `secret_key`; import replaces the database and `$DATA_DIR/.secret_key` (mode `0600`) and re-issues the admin session. Cross-upload of the wrong zip kind is rejected.
+- Web UI: Jinja2 plus minimal vanilla JS. Routes: `/login`, `/change-password`, `/logout`, `/`, `/tokens`, `/machines`, `/data`, `/backup` (dataset and sync-server export/import). Footer shows version, UTC build stamp, copyright, and the GitHub link from `app/version.py`.
 - Presence: derived, not stored. Active: last seen within 15 minutes. Recent: within 24 hours. Stale: older. Never: null. Push and pull both update `last_seen_utc`.
 - Version: `./scripts/set-version` rewrites `VERSION` and `BUILD_TIMESTAMP` in `app/version.py`. Docker may also write `app/BUILD_TIMESTAMP` at image build. `APP_VERSION` / `BUILD_TIMESTAMP` env vars override display only.
 
