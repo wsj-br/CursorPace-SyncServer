@@ -54,7 +54,7 @@ Non-goals: user accounts beyond one admin password, live presence sockets, TLS t
 | `DATA_DIR` | no | `/data` | SQLite file `sync.db` and session secret `.secret_key` live here; must be a Docker volume. |
 | `PORT` | no | `7050` | Listen port. |
 
-Startup behavior: run DDL migrations, create `$DATA_DIR/.secret_key` (mode `0600`) if missing, seed the default admin password `cursorpace01` if the `meta` key `admin_hash` is absent, then serve. First admin login with that default must choose a new password before the rest of the UI is available.
+Startup behavior: run DDL migrations, create `$DATA_DIR/.secret_key` (mode `0600`) if missing, seed the default admin password `cursorpace01` if the `meta` key `admin_hash` is absent, log the version and build timestamp, then serve. `GET /healthz` is omitted from the access log. First admin login with that default must choose a new password before the rest of the UI is available.
 
 ## 5. Database schema (SQLite, file `sync.db`)
 

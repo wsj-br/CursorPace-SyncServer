@@ -26,13 +26,14 @@ pip install -r requirements.txt
 
 `scripts/dev.sh` uses `$DATA_DIR` and `$PORT` from the environment (or
 `.env` / `.env.local`), defaulting to `./data` and `7050`, and enables
-uvicorn `--reload`.
+uvicorn `--reload`. On startup the console logs the version and build
+timestamp. `GET /healthz` is omitted from the access log.
 
 To change the version shown in the UI footer:
 
 ```bash
-./scripts/set-version          # current version and build timestamp
-./scripts/set-version 1.2.3
+./scripts/version          # current version and build timestamp
+./scripts/version 1.2.3
 ```
 
 Then open `http://127.0.0.1:7050/login` and sign in with `cursorpace01`.
@@ -110,7 +111,7 @@ Before preparing a new release, run `./scripts/upgrade-deps` to refresh the
 package. The script writes Unreleased changelog bullets and reverts the pin
 files if pytest fails.
 
-1. Set `VERSION` in `app/version.py` with `./scripts/set-version x.y.z` and commit it.
+1. Set `VERSION` in `app/version.py` with `./scripts/version x.y.z` and commit it.
 2. Follow `dev/release-new-version-prompt.md` to write
    `release-notes/RELEASE_NOTES_<version>.md` and move changelog bullets.
 3. Commit those files on a clean tree.

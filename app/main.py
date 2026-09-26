@@ -77,6 +77,21 @@ _UVICORN_DEFAULT_FMT = "%(levelprefix)s %(asctime)s %(message)s"
 _UVICORN_ACCESS_FMT = (
     '%(levelprefix)s %(asctime)s %(client_addr)s - "%(request_line)s" %(status_code)s'
 )
+_UVICORN_ERROR = logging.getLogger("uvicorn.error")
+_UVICORN_ACCESS = logging.getLogger("uvicorn.access")
+
+
+class HealthzAccessFilter(logging.Filter):
+    """Drop Docker/Compose healthcheck noise from the uvicorn access log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if not isinstance(args, tuple) or len(args) < 3:
+            return True
+        full_path = args[2]
+        if not isinstance(full_path, str):
+            return True
+        return full_path.split("?", 1)[0] != "/healthz"
 
 
 # ---------------------------------------------------------------------------
@@ -122,6 +137,8 @@ def enable_console_timestamps() -> None:
             handler.setFormatter(
                 formatter_cls(fmt=fmt, datefmt=_CONSOLE_TIME_FMT, use_colors=use_colors)
             )
+    if not any(isinstance(item, HealthzAccessFilter) for item in _UVICORN_ACCESS.filters):
+        _UVICORN_ACCESS.addFilter(HealthzAccessFilter())
 
 
 def presence_status(last_seen_utc: str | None, now: datetime | None = None) -> str:
@@ -275,6 +292,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     conn, "admin_hash", hash_admin_password(DEFAULT_ADMIN_PASSWORD)
                 )
                 await conn.commit()
+        _UVICORN_ERROR.info("--------------------------------")
+        _UVICORN_ERROR.info(
+            "CursorPace Sync Server version %s, built %s",
+            release.version,
+            release.build_timestamp,
+        )
+        _UVICORN_ERROR.info("--------------------------------")
         yield
 
     app = FastAPI(

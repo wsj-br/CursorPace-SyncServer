@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.auth import DEFAULT_ADMIN_PASSWORD
 from app.config import Settings
-from app.main import create_app, enable_console_timestamps
+from app.main import HealthzAccessFilter, create_app, enable_console_timestamps
 from app.version import COPYRIGHT, GITHUB_URL, LICENSE_URL, load_release_info
 
 
@@ -179,9 +179,58 @@ def test_console_logs_include_clock_time():
         formatted = access_handler.formatter.format(record)
         assert re.search(r"\d{2}:\d{2}:\d{2}", formatted)
         assert "GET /machines" in formatted
+        assert any(isinstance(item, HealthzAccessFilter) for item in access.filters)
+        healthz_filter = next(
+            item for item in access.filters if isinstance(item, HealthzAccessFilter)
+        )
+        healthz = logging.LogRecord(
+            name="uvicorn.access",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg='%s - "%s %s HTTP/%s" %d',
+            args=("127.0.0.1:1", "GET", "/healthz", "1.1", 200),
+            exc_info=None,
+        )
+        healthz_query = logging.LogRecord(
+            name="uvicorn.access",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg='%s - "%s %s HTTP/%s" %d',
+            args=("127.0.0.1:1", "GET", "/healthz?ready=1", "1.1", 200),
+            exc_info=None,
+        )
+        assert healthz_filter.filter(healthz) is False
+        assert healthz_filter.filter(healthz_query) is False
+        assert healthz_filter.filter(record) is True
     finally:
         access.removeHandler(access_handler)
         error.removeHandler(error_handler)
+
+
+def test_startup_logs_version_and_build(tmp_path):
+    release = load_release_info()
+    messages: list[str] = []
+
+    class Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            messages.append(record.getMessage())
+
+    handler = Capture()
+    logger = logging.getLogger("uvicorn.error")
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    try:
+        app = make_app(tmp_path)
+        with TestClient(app):
+            pass
+    finally:
+        logger.removeHandler(handler)
+    assert any(
+        release.version in message and release.build_timestamp in message
+        for message in messages
+    )
 
 
 def test_first_login_forces_password_change(tmp_path):

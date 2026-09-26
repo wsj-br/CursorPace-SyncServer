@@ -31,7 +31,7 @@ Treat `app/` and the tests as truth. Spec details live in `dev/sync-server-imple
 | `dev/` | `CHANGELOG.md`, `DEVEL.md`, implementation plan, release-notes prompt. |
 | `scripts/dev.sh` | Local uvicorn `--reload` using `DATA_DIR` / `PORT` (or `.env` / `.env.local`). |
 | `scripts/clean.sh` | Remove bytecode, pytest leftovers, and optional local `data/` / `.venv`. |
-| `scripts/set-version` | Print or set `VERSION` and refresh `BUILD_TIMESTAMP` in `app/version.py`. |
+| `scripts/version` | Print or set `VERSION` and refresh `BUILD_TIMESTAMP` in `app/version.py`. |
 | `scripts/upgrade-deps` | CLI for `scripts/upgrade_deps.py`: bump pins from PyPI, `--alerts`, or `--set`. |
 | `scripts/release.sh` | Tag `v<VERSION>` at HEAD and trigger `.github/workflows/release.yml`. |
 | `.github/workflows/release.yml` | Tests, multi-arch image to GHCR, GitHub Release from notes. |
@@ -52,7 +52,7 @@ Construct the app with `create_app(settings)`. Tests pass a temp `Settings(data_
 - Backup: two zip products. App zip `CursorPace` `formatVersion` 1; import replaces samples + cycle meta unless merge is checked (then union per `merge.py` / push). Accept app-produced zips; reject `product` other than `CursorPace` and `formatVersion` greater than 1. Missing `manifest.json` is allowed (old backups). Missing `usage-samples.json` means empty samples. Sync-server zip `CursorPaceSyncServer` contains `sync.db` and `secret_key`; import replaces the database and `$DATA_DIR/.secret_key` (mode `0600`) and re-issues the admin session. Cross-upload of the wrong zip kind is rejected.
 - Web UI: Jinja2 plus minimal vanilla JS. Routes: `/login`, `/change-password`, `/logout`, `/`, `/tokens`, `/machines`, `/data`, `/backup` (dataset and sync-server export/import). Footer shows version, UTC build stamp, copyright, and the GitHub link from `app/version.py`.
 - Presence: derived, not stored. Active: last seen within 15 minutes. Recent: within 24 hours. Stale: older. Never: null. Push and pull both update `last_seen_utc`.
-- Version: `./scripts/set-version` rewrites `VERSION` and `BUILD_TIMESTAMP` in `app/version.py`. Docker may also write `app/BUILD_TIMESTAMP` at image build. `APP_VERSION` / `BUILD_TIMESTAMP` env vars override display only.
+- Version: `./scripts/version` rewrites `VERSION` and `BUILD_TIMESTAMP` in `app/version.py`. Docker may also write `app/BUILD_TIMESTAMP` at image build. `APP_VERSION` / `BUILD_TIMESTAMP` env vars override display only.
 
 ## Sync contract
 Base path `/api/v1`. Max 50,000 samples per push (else 413). Unparseable timestamps are HTTP 400 naming the index.
@@ -65,7 +65,7 @@ Base path `/api/v1`. Max 50,000 samples per push (else 413). Unparseable timesta
 
 This server never talks to Cursor. Desktop clients fetch usage themselves and replicate samples plus cycle bounds/history only.
 
-If you change timestamp/decimal rules or cycle-winner / history-union, update and run `tests/test_merge.py`. If you change push/pull/auth HTTP behavior, update `tests/test_api.py`. If you change the zip format or import transaction, update `tests/test_backup.py`. If you change admin login, password gate, pages, or footer metadata, update `tests/test_web.py`. If you change display formatting or presence chips, update `tests/test_ui.py`. If you change `.secret_key` path or mode, update `tests/test_config.py`. If you change `VERSION` assignment shape or `scripts/set-version`, update `tests/test_version.py`. If you change pin-upgrade selection or `scripts/upgrade-deps`, update `tests/test_upgrade_deps.py`.
+If you change timestamp/decimal rules or cycle-winner / history-union, update and run `tests/test_merge.py`. If you change push/pull/auth HTTP behavior, update `tests/test_api.py`. If you change the zip format or import transaction, update `tests/test_backup.py`. If you change admin login, password gate, pages, or footer metadata, update `tests/test_web.py`. If you change display formatting or presence chips, update `tests/test_ui.py`. If you change `.secret_key` path or mode, update `tests/test_config.py`. If you change `VERSION` assignment shape or `scripts/version`, update `tests/test_version.py`. If you change pin-upgrade selection or `scripts/upgrade-deps`, update `tests/test_upgrade_deps.py`.
 
 ## Commands
 ```
@@ -75,8 +75,8 @@ pip install -r requirements.txt
 ./scripts/clean.sh
 pytest -q
 python3 -m py_compile app/*.py tests/*.py
-./scripts/set-version
-./scripts/set-version 1.2.3
+./scripts/version
+./scripts/version 1.2.3
 ./scripts/upgrade-deps --dry-run
 ./scripts/upgrade-deps --alerts
 ./scripts/upgrade-deps

@@ -2,7 +2,7 @@ Create a new release notes file `release-notes/RELEASE_NOTES_<version>.md` for C
 
 **Instructions:**
 
-1. **Read `app/version.py`** and take `VERSION` (`x.y.z`). You can confirm with `./scripts/set-version`. Do not bump the version in this step; it must already be the version being released.
+1. **Read `app/version.py`** and take `VERSION` (`x.y.z`). You can confirm with `./scripts/version`. Do not bump the version in this step; it must already be the version being released.
 2. **Open `dev/CHANGELOG.md`**.
 3. **Copy all entries under the `## [Unreleased]` section** up to (but not including) the next `## [` heading (the last released version). If `[Unreleased]` has no bullets, stop and say there is nothing to release.
 4. **Format the new file** according to prior notes in `release-notes/RELEASE_NOTES_x.y.z.md`:

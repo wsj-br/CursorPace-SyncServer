@@ -2,8 +2,8 @@
 """Set the application version and refresh the build timestamp.
 
 Usage:
-  scripts/set-version          # print current version and build timestamp
-  scripts/set-version 1.2.3
+  scripts/version          # print current version and build timestamp
+  scripts/version 1.2.3
 """
 
 from __future__ import annotations

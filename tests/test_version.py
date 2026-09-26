@@ -1,9 +1,10 @@
-"""Release metadata and the set-version helper."""
+"""Release metadata and the version helper."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
+from subprocess import run
 
 import pytest
 
@@ -56,17 +57,15 @@ def test_load_release_info_prefers_env(monkeypatch):
     assert load_release_info().version
 
 
-def test_set_version_show_script():
-    from subprocess import run
-
+def test_version_show_script():
     shown = run(
-        [os.fspath(Path("scripts/set-version"))],
+        [os.fspath(Path("scripts/version"))],
         check=True,
         capture_output=True,
         text=True,
     )
     flagged = run(
-        [os.fspath(Path("scripts/set-version")), "--show"],
+        [os.fspath(Path("scripts/version")), "--show"],
         check=True,
         capture_output=True,
         text=True,

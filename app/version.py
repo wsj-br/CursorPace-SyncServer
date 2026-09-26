@@ -11,9 +11,9 @@ from pathlib import Path
 VERSION_FILE = Path(__file__).resolve()
 BUILD_STAMP_FILE = VERSION_FILE.with_name("BUILD_TIMESTAMP")
 
-# set-version script updates these two assignments.
-VERSION = "0.2.1"
-BUILD_TIMESTAMP = "2026-09-26T19:11:44Z"
+# version script updates these two assignments.
+VERSION = "0.2.2"
+BUILD_TIMESTAMP = "2026-09-26T22:52:14Z"
 GITHUB_URL = "https://github.com/wsj-br/CursorPace-SyncServer"
 LICENSE_URL = f"{GITHUB_URL}/blob/main/LICENSE"
 COPYRIGHT = "© 2026 Waldemar Scudeller Jr."
