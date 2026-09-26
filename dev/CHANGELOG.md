@@ -8,6 +8,8 @@ Add new entries in the `## [Unreleased]` section. When releasing, move those ent
 
 ## [Unreleased]
 
+- **Fixed**: docker - Capture `imagetools inspect` output before parsing the digest so the release job does not exit 255 under `pipefail`.
+
 ## [0.2.2] - 2026-09-26
 
 - **Changed**: scripts - Renamed `scripts/set-version` to `scripts/version`.

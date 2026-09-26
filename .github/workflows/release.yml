@@ -225,9 +225,12 @@ jobs:
           VERSION: ${{ needs.test.outputs.version }}
         run: |
           set -euo pipefail
-          digest="$(docker buildx imagetools inspect "${REGISTRY_IMAGE}:${VERSION}" | awk '/^Digest:/ { print $2; exit }')"
-          if [[ -z "${digest}" ]]; then
-            echo "Could not inspect image digest" >&2
+          ref="${REGISTRY_IMAGE}:${VERSION}"
+          inspect="$(docker buildx imagetools inspect "${ref}")"
+          printf '%s\n' "${inspect}"
+          digest="$(awk '/^Digest:/ { print $2; exit }' <<< "${inspect}")"
+          if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "Could not inspect image digest for ${ref}" >&2
             exit 1
           fi
           echo "digest=${digest}" >> "${GITHUB_OUTPUT}"
