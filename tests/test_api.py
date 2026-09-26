@@ -74,7 +74,7 @@ def test_push_pull_converge_and_idempotent(tmp_path):
         "cycle_history": [],
         "samples": [
             {"ts": "2026-09-01T10:00:00Z", "cursor": "12.50", "other": "3.25"},
-            {"ts": "2026-09-02T10:00:00Z", "cursor": "1.00", "other": "0.50"},
+            {"ts": "2026-09-02T10:00:00Z", "cursor": "13.00", "other": "3.50"},
         ],
     }
     with TestClient(app) as client:
@@ -89,8 +89,8 @@ def test_push_pull_converge_and_idempotent(tmp_path):
             "active_cycle": active,
             "cycle_history": [],
             "samples": [
-                {"ts": "2026-09-02T10:00:00Z", "cursor": "1.00", "other": "0.50"},
-                {"ts": "2026-09-03T10:00:00Z", "cursor": "2.00", "other": "1.00"},
+                {"ts": "2026-09-02T10:00:00Z", "cursor": "13.00", "other": "3.50"},
+                {"ts": "2026-09-03T10:00:00Z", "cursor": "14.00", "other": "4.00"},
             ],
         }
         r = client.post("/api/v1/push", json=body_b, headers=headers)
@@ -148,3 +148,114 @@ def test_bad_timestamp_400_names_index(tmp_path):
         )
         assert r.status_code == 400
         assert "samples[0]" in r.json()["detail"]
+
+
+def test_push_drops_within_cycle_regression_and_purges_stored(tmp_path):
+    app, token = make_app(tmp_path)
+    headers = auth(token)
+    cycle = "2026-09-01T00:00:00.000000Z"
+    db_path = db_mod.db_path_for(tmp_path)
+
+    async def seed_dip() -> None:
+        async with aiosqlite.connect(str(db_path)) as conn:
+            await db_mod.insert_samples_ignore(
+                conn,
+                [
+                    ("2026-09-26T18:11:00.000000Z", "70.145", "67.0545", "old"),
+                    ("2026-09-26T18:12:00.000000Z", "69.7225", "67.0545", "old"),
+                    ("2026-09-26T18:13:00.000000Z", "70.145", "67.0545", "old"),
+                    ("2026-08-31T18:00:00.000000Z", "90", "90", "old"),
+                ],
+            )
+            await db_mod.set_meta(conn, "cycle_start_utc", cycle)
+            await conn.commit()
+
+    asyncio.run(seed_dip())
+    with TestClient(app) as client:
+        r = client.post(
+            "/api/v1/push",
+            json={
+                "machine_name": "m",
+                "cycle_start_utc": cycle,
+                "samples": [
+                    {
+                        "ts": "2026-09-26T18:14:00Z",
+                        "cursor": "70.200",
+                        "other": "67.0545",
+                    }
+                ],
+            },
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["accepted"] == 1
+        assert r.json()["duplicates"] == 0
+        pulled = client.get("/api/v1/pull", headers=headers).json()
+        by_ts = {s["ts"]: s for s in pulled["samples"]}
+        assert "2026-09-26T18:12:00.000000Z" not in by_ts
+        assert "2026-08-31T18:00:00.000000Z" in by_ts
+        assert by_ts["2026-09-26T18:11:00.000000Z"]["cursor"] == "70.145"
+        assert by_ts["2026-09-26T18:13:00.000000Z"]["cursor"] == "70.145"
+        assert by_ts["2026-09-26T18:14:00.000000Z"]["cursor"] == "70.200"
+
+        again = client.post(
+            "/api/v1/push",
+            json={
+                "machine_name": "m",
+                "cycle_start_utc": cycle,
+                "samples": [
+                    {
+                        "ts": "2026-09-26T18:12:00Z",
+                        "cursor": "69.7225",
+                        "other": "67.0545",
+                    }
+                ],
+            },
+            headers=headers,
+        )
+        assert again.json()["accepted"] == 0
+        assert again.json()["duplicates"] == 1
+        pulled = client.get("/api/v1/pull", headers=headers).json()
+        assert "2026-09-26T18:12:00.000000Z" not in {
+            s["ts"] for s in pulled["samples"]
+        }
+
+
+def test_push_same_batch_drops_regression(tmp_path):
+    app, token = make_app(tmp_path)
+    headers = auth(token)
+    with TestClient(app) as client:
+        r = client.post(
+            "/api/v1/push",
+            json={
+                "machine_name": "m",
+                "cycle_start_utc": "2026-09-01T00:00:00.000000Z",
+                "samples": [
+                    {
+                        "ts": "2026-09-26T18:11:00Z",
+                        "cursor": "70.145",
+                        "other": "67.0545",
+                    },
+                    {
+                        "ts": "2026-09-26T18:12:00Z",
+                        "cursor": "69.7225",
+                        "other": "67.0545",
+                    },
+                    {
+                        "ts": "2026-09-26T18:13:00Z",
+                        "cursor": "70.145",
+                        "other": "67.0545",
+                    },
+                ],
+            },
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["accepted"] == 2
+        assert r.json()["duplicates"] == 1
+        assert r.json()["total_samples"] == 2
+        pulled = client.get("/api/v1/pull", headers=headers).json()
+        assert [s["ts"] for s in pulled["samples"]] == [
+            "2026-09-26T18:11:00.000000Z",
+            "2026-09-26T18:13:00.000000Z",
+        ]

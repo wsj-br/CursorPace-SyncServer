@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS devices (
 
 Given an authenticated `POST /api/v1/push` body (schema in 8.1):
 
-1. Samples: `INSERT OR IGNORE` each normalized sample; first writer wins per timestamp (values for the same instant are identical in practice since all machines read the same Cursor account).
+1. Samples: `INSERT OR IGNORE` each normalized sample; first writer wins per timestamp (values for the same instant are identical in practice since all machines read the same Cursor account). Within the current cycle (`ts` >= merged `cycle_start_utc`; the full set when that value is null), walk samples in time order and drop any row whose `cursor` or `other` is strictly less than the previous kept row (equals kept; compare with `Decimal`). Delete any already-stored in-cycle row that fails that check. Dropped incoming rows count as `duplicates`. Samples older than `cycle_start_utc` are left unchanged.
 2. `cycle_start_utc`: keep the latest instant (max) of stored vs pushed.
 3. `active_cycle`: newest wins — compare `cycle_start` as an instant (parse local ISO as-is for ordering; all machines share one Cursor account so wall clocks agree to the minute); later start wins; tie-break by later `next_renewal`; final tie-break keeps the stored value.
 4. `cycle_history`: union by `cycle_start` date part; on duplicate start date keep the entry with the later `next_renewal`.
@@ -175,7 +175,7 @@ The server export MUST be restorable by the desktop app, and server import MUST 
 
 ### 7.4 Import behavior
 
-- Default: replaces the entire canonical dataset (samples + cycle meta) inside one SQLite transaction. Missing cycle keys in the zip delete the corresponding stored meta rows.
+- Default: replaces the entire canonical dataset (samples + cycle meta) inside one SQLite transaction. Missing cycle keys in the zip delete the corresponding stored meta rows. After the clear, in-cycle samples from the zip are filtered the same way as push (drop rows whose `cursor` or `other` go backwards).
 - Merge (checkbox on `POST /backup/import`): do not clear samples. Union by canonical `ts` with first writer wins (`INSERT OR IGNORE`); merge `cycle_start_utc`, `active_cycle`, and `cycle_history` per 6.3. Missing zip fields keep stored values. Tokens are not changed.
 - Zips containing `sync.db` are rejected here; use the sync-server import (7.5).
 - Missing `usage-samples.json` in the zip means empty samples (do not fail).

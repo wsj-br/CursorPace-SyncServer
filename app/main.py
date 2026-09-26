@@ -56,6 +56,7 @@ from .merge import (
     normalize_timestamp,
     pick_active_cycle,
     pick_cycle_start_utc,
+    reconcile_cycle_samples,
     union_cycle_history,
     utc_now_canonical,
 )
@@ -170,6 +171,25 @@ async def _read_cycle_state(
     active = json.loads(raw_active) if raw_active else None
     history = json.loads(raw_history) if raw_history else []
     return raw_start, active, history if isinstance(history, list) else []
+
+
+async def _merge_samples(
+    conn: aiosqlite.Connection,
+    incoming: list[tuple[str, str, str, str]],
+    cycle_start_utc: str | None,
+) -> tuple[int, int]:
+    """Union samples, drop within-cycle regressions, purge stored dips.
+
+    ``duplicates`` counts both timestamp clashes and dropped regressions.
+    """
+    stored = await db_mod.get_all_samples(conn)
+    delete_ts, insert_rows = reconcile_cycle_samples(
+        stored, incoming, cycle_start_utc
+    )
+    await db_mod.delete_samples_by_ts(conn, delete_ts)
+    accepted, duplicates = await db_mod.insert_samples_ignore(conn, insert_rows)
+    dropped = len(incoming) - len(insert_rows)
+    return accepted, duplicates + dropped
 
 
 def _session(request: Request) -> dict | None:
@@ -354,12 +374,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             merged_active = pick_active_cycle(stored_active, pushed_active)
             merged_history = union_cycle_history(stored_history, pushed_history)
 
-            accepted, duplicates = await db_mod.insert_samples_ignore(
+            accepted, duplicates = await _merge_samples(
                 conn,
                 [
                     (ts, cursor, other, body.machine_name)
                     for ts, cursor, other in normalized
                 ],
+                merged_start,
             )
             if merged_start is not None:
                 await db_mod.set_meta(conn, "cycle_start_utc", merged_start)
@@ -756,12 +777,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     pushed_active if isinstance(pushed_active, dict) else None,
                 )
                 merged_history = union_cycle_history(stored_history, history)
-                accepted, duplicates = await db_mod.insert_samples_ignore(
+                accepted, duplicates = await _merge_samples(
                     conn,
                     [
                         (s["ts"], s["cursor"], s["other"], "")
                         for s in samples  # type: ignore[misc]
                     ],
+                    merged_start,
                 )
                 if merged_start is not None:
                     await db_mod.set_meta(
@@ -782,14 +804,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             else:
                 await db_mod.clear_samples(conn)
-                await db_mod.insert_samples_ignore(
+                cycle_start_utc = parsed["cycle_start_utc"]
+                accepted, _duplicates = await _merge_samples(
                     conn,
                     [
                         (s["ts"], s["cursor"], s["other"], "")
                         for s in samples  # type: ignore[misc]
                     ],
+                    str(cycle_start_utc) if isinstance(cycle_start_utc, str) else None,
                 )
-                cycle_start_utc = parsed["cycle_start_utc"]
                 if cycle_start_utc is not None:
                     await db_mod.set_meta(
                         conn, "cycle_start_utc", str(cycle_start_utc)
@@ -812,7 +835,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
                 await conn.commit()
                 message = (
-                    f"Imported {len(samples)} samples, "
+                    f"Imported {accepted} samples, "
                     f"{len(history)} history entries."
                 )
         return _backup_page(request, message=message)

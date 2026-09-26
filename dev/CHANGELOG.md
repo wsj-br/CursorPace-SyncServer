@@ -8,6 +8,11 @@ Add new entries in the `## [Unreleased]` section. When releasing, move those ent
 
 ## [Unreleased]
 
+- **Changed**: deps - `uvicorn` 0.53.0 to 0.54.0.
+## [0.2.1] - 2026-09-26
+
+- **Changed**: merge - drop within-cycle samples whose `cursor` or `other` go backwards, and purge stored dips on push and backup import.
+
 ## [0.2.0] - 2026-09-20
 
 - **Added**: backup - Sync server zip export/import (`sync.db` + session secret).

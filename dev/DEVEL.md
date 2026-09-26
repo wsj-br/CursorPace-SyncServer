@@ -122,47 +122,28 @@ files if pytest fails.
 Re-running `./scripts/release.sh` for the same version deletes the existing
 GitHub release and tag, then retags HEAD.
 
-## 6. Build and run the Docker container
+## 6. Build and test the Docker image locally
 
-Published image (after a release):
-
-```bash
-docker pull ghcr.io/wsj-br/cursorpace-syncserver:latest
-docker run --rm -p 7050:7050 \
-  -v sync-data:/data \
-  ghcr.io/wsj-br/cursorpace-syncserver:latest
-```
-
-Build locally:
-
-```bash
-docker build -t cursorpace-sync .
-docker run --rm -p 7050:7050 \
-  -v sync-data:/data \
-  cursorpace-sync
-```
-
-Verify:
-
-```bash
-curl http://127.0.0.1:7050/healthz   # {"status":"ok"}
-docker inspect --format='{{json .State.Health.Status}}' <container>
-```
-
-Persistence check: push data, `docker stop` + `docker start` (same volume),
-pull again — samples, cycles, and tokens must survive.
-
-Or use Compose (see `docker-compose.yml`). `docker compose up -d` pulls the
-GHCR image; add `--build` to build from the local Dockerfile:
+`docker-compose.yml` is the local development example. Build the image from
+the working tree and start the container:
 
 ```bash
 docker compose up --build -d
 docker compose logs -f sync
 ```
 
-`docker-compose.yml` is the local development/example configuration. For a
-production deployment, use `production.yml` and follow the deployment
-instructions in `README.md`; it does not build from the working tree.
+Check that the container is up and the healthcheck passes:
+
+```bash
+curl http://127.0.0.1:7050/healthz   # {"status":"ok"}
+docker inspect --format='{{json .State.Health.Status}}' cp-sync
+```
+
+Stop and remove the container:
+
+```bash
+docker compose down
+```
 
 ## Troubleshooting
 

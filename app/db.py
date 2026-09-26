@@ -146,6 +146,20 @@ async def clear_samples(db: aiosqlite.Connection) -> None:
     await db.execute("DELETE FROM samples")
 
 
+async def delete_samples_by_ts(
+    db: aiosqlite.Connection, timestamps: list[str]
+) -> None:
+    """Delete samples by primary key. No-op when ``timestamps`` is empty."""
+    chunk = 500
+    for start in range(0, len(timestamps), chunk):
+        batch = timestamps[start : start + chunk]
+        placeholders = ",".join("?" * len(batch))
+        await db.execute(
+            f"DELETE FROM samples WHERE ts IN ({placeholders})",
+            batch,
+        )
+
+
 def _device_from_row(row: tuple) -> Device:
     return Device(
         id=row[0],

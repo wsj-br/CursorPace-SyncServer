@@ -71,7 +71,9 @@ if that file is missing.
 
 - `GET /healthz` → `{"status": "ok"}` (no auth).
 - `POST /api/v1/push` with `Authorization: Bearer <token>` merges samples +
-  cycle bounds (spec §6.3). Max 50,000 samples per request.
+  cycle bounds (spec §6.3). Within the current cycle, a sample whose cursor
+  or other percentage goes backwards is dropped (and a stored dip is deleted).
+  Max 50,000 samples per request.
 - `GET /api/v1/pull` with `Authorization: Bearer <token>` returns the full
   canonical state (spec §6.4).
 
@@ -83,7 +85,8 @@ The **Backup** page has two zip kinds:
   (`manifest.json`, `settings.json`, `usage-samples.json`). **Import dataset**
   accepts app-produced zips. By default it replaces samples and cycle metadata
   in one transaction; check **Merge** to union samples (first writer wins) and
-  cycle bounds using the same rules as push. Tokens are not changed.
+  cycle bounds using the same rules as push, including dropping within-cycle
+  decreases. Tokens are not changed.
 - **Sync server** → **Export server backup** downloads
   `cursorpace-sync-backup-<stamp>.zip` (`manifest.json`, `sync.db`,
   `secret_key`). **Import server backup** replaces the database, API tokens,

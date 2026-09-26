@@ -383,8 +383,8 @@ def test_http_import_replace_and_merge(tmp_path: Path):
             },
             {
                 "ts": "2026-09-03T10:00:00.000000Z",
-                "cursor": "3.00",
-                "other": "0.75",
+                "cursor": "100",
+                "other": "10",
             },
         ],
         cycle_start_utc="2026-08-15T00:00:00.000000Z",
