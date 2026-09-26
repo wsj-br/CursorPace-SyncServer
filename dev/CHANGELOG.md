@@ -8,6 +8,8 @@ Add new entries in the `## [Unreleased]` section. When releasing, move those ent
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-26
+
 - **Changed**: scripts - Renamed `scripts/set-version` to `scripts/version`.
 - **Added**: web - Startup log line with version and build timestamp.
 - **Changed**: web - Omit `GET /healthz` from the uvicorn access log.
